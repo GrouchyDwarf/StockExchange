@@ -141,7 +141,7 @@ namespace StockExchange
                                                    _lastSentMessage = await _bot.EditMessageTextAsync(chatId, _lastSentMessage.MessageId, tradeMessage);
                                                }
                                            }
-                                       }, await _stockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(_globalSymbol));
+                                       }/*, await _stockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(_globalSymbol)*/);
                                     }
                                     else if (_dataType == "Tickers")
                                     {
@@ -150,21 +150,24 @@ namespace StockExchange
                                             var tickerMessage = "";
                                             foreach (var ticker in tickers)
                                             {
-                                                tickerMessage = $"Ticker {ticker.Key}; Value: {ticker.Value}";
-                                                if (_lastSentMessage == null || !_lastSentMessage.Text.Contains(ticker.Key))
+                                                if (ticker.Key == _globalSymbol)
                                                 {
-                                                    _lastSentMessage = await _bot.SendTextMessageAsync(chatId, tickerMessage);
-                                                }
-                                                else
-                                                {
-                                                    _lastSentMessage = await _bot.EditMessageTextAsync(chatId, _lastSentMessage.MessageId, tickerMessage);
+                                                    tickerMessage = $"Ticker {ticker.Key}; Value: {ticker.Value.MarketSymbol}";
+                                                    if (_lastSentMessage == null || !_lastSentMessage.Text.Contains(ticker.Key))
+                                                    {
+                                                        _lastSentMessage = await _bot.SendTextMessageAsync(chatId, tickerMessage);
+                                                    }
+                                                    else
+                                                    {
+                                                        _lastSentMessage = await _bot.EditMessageTextAsync(chatId, _lastSentMessage.MessageId, tickerMessage);
+                                                    }
                                                 }
                                             }
-                                        }, await _stockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(_globalSymbol));
+                                        }/*, await _stockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(_globalSymbol)*/);
                                     }
                                     else if(_dataType == "Candles")
                                     {
-                                        
+                                        //_stockExchange.webSocket
                                     }
                                 }
                             }
