@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ExchangeSharp;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace StockExchange
@@ -52,10 +53,21 @@ namespace StockExchange
                 {
                     Keyboard = keyboardButtons
                 };
-                long chatId = 764606140;
-                await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup:keyboard);
-                var firstUpdate = await _bot.GetUpdatesAsync(0);
+                //long chatId = 764606140;
+                
+                Update[] firstUpdate = new Update[0];
                 int offset = 0;
+                long chatId = 0;
+                while (true)
+                {
+                    firstUpdate = await _bot.GetUpdatesAsync(0);
+                    if (firstUpdate.Length != 0)
+                    {
+                        chatId = firstUpdate[0].Message.Chat.Id;
+                        break;
+                    }
+                }
+                await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup:keyboard);
                 if (firstUpdate.Length >= 1)
                 {
                     offset = firstUpdate[firstUpdate.Length - 1].Id + 1;
@@ -127,7 +139,7 @@ namespace StockExchange
                                 {
                                     if (_dataType == "Trades")
                                     {
-                                        var trades = await _stockExchange.GetTradesWebSocketAsync(async trade =>
+                                        /*var trades = */await _stockExchange.GetTradesWebSocketAsync(async trade =>
                                        {
                                            if (trade.Key == _globalSymbol)
                                            {
@@ -145,14 +157,14 @@ namespace StockExchange
                                     }
                                     else if (_dataType == "Tickers")
                                     {
-                                        var _ticker = await _stockExchange.GetTickersWebSocketAsync(async tickers => 
+                                        /*var _ticker = */await _stockExchange.GetTickersWebSocketAsync(async tickers => 
                                         {
                                             var tickerMessage = "";
                                             foreach (var ticker in tickers)
                                             {
                                                 if (ticker.Key == _globalSymbol)
                                                 {
-                                                    tickerMessage = $"Ticker {ticker.Key}; Value: {ticker.Value.MarketSymbol}";
+                                                    tickerMessage = $"Ticker {ticker.Key}; Value: {ticker.Value}";
                                                     if (_lastSentMessage == null || !_lastSentMessage.Text.Contains(ticker.Key))
                                                     {
                                                         _lastSentMessage = await _bot.SendTextMessageAsync(chatId, tickerMessage);
@@ -167,7 +179,29 @@ namespace StockExchange
                                     }
                                     else if(_dataType == "Candles")
                                     {
-                                        //_stockExchange.webSocket
+                                        var candle = new MarketCandle();
+                                        await _stockExchange.GetTradesWebSocketAsync(async trade =>
+                                        {    
+                                            if (_globalSymbol == trade.Key)
+                                            {
+                                                if (candle.ExchangeName == _globalSymbol)
+                                                {
+                                                    candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
+                                                    candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
+                                                    candle.ClosePrice = trade.Value.Price;
+                                                    _lastSentMessage = await _bot.EditMessageTextAsync(chatId, _lastSentMessage.MessageId, $"Exchange Name:{candle.ExchangeName};" +
+                                                        $"Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}");
+                                                }
+                                                else
+                                                {
+                                                    candle.ExchangeName = trade.Key;
+                                                    candle.OpenPrice = trade.Value.Price;
+                                                    candle.LowPrice = trade.Value.Price;
+                                                    _lastSentMessage = await _bot.SendTextMessageAsync(chatId, $"Exchange Name:{candle.ExchangeName};" +
+                                                        $"Open Price:{candle.OpenPrice}");
+                                                }
+                                            }
+                                        });
                                     }
                                 }
                             }
