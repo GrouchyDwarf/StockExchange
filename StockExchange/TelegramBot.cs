@@ -43,7 +43,9 @@ namespace StockExchange
                 new ChooseStockExchange(),
                 new ChooseMarketSymbol(),
                 new Clear(),
-                new Back()
+                new Back(),
+                new Previous(),
+                new Next()
             };
             _stockExchanges = new StockExchanges();
         }
@@ -105,31 +107,6 @@ namespace StockExchange
             return null;
         }
         //выводит все одной страницей
-        /*private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
-        {
-            int modulo = buttons.Count % limit;
-            for (int i = 0; i < Math.Ceiling((decimal)(buttons.Count / limit)); ++i)
-            {
-                var partButtons = new List<string>();
-                if (i != Math.Ceiling((decimal)(buttons.Count / limit)) - 1)
-                {
-                    for (int j = i * limit; j < (i + 1) * limit; ++j)
-                    {
-                        partButtons.Add(buttons[j]);
-                    }
-                }
-                else
-                {
-                    for (int j = (i + 1) * limit; j < (i + 1) * limit + modulo; ++j)
-                    {
-                        partButtons.Add(buttons[j]);
-                    }
-                }
-                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
-                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
-            }
-        }*/
-
         private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
         {
             int modulo = buttons.Count % limit;
@@ -154,8 +131,39 @@ namespace StockExchange
                 await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
             }
         }
+        //выводит несколькими страницами
+        private async Task SendOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
+        {
+            int modulo = buttons.Count % limit;
+            var partButtons = new List<string>();
+            decimal totalNumberPages = Math.Ceiling((decimal)(buttons.Count / limit)) - 1;
+            if(pageNumber != totalNumberPages)
+            {
+                for(int j = pageNumber * limit; j < (pageNumber + 1) * limit; ++j)
+                {
+                    partButtons.Add(buttons[j]);
+                }
+            }
+            else
+            {
+                for(int j = (pageNumber + 1) * limit; j < (pageNumber + 1) * limit + modulo; ++j)
+                {
+                    partButtons.Add(buttons[j]);
+                }
+            }
+            if (pageNumber < totalNumberPages) 
+            {
+                partButtons.Add(new Next().Message);
+            }
+            if(pageNumber > 0)
+            {
+                partButtons.Add(new Previous().Message);
+            }
+            inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
+            await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+        }
 
-        private async Task SendMessageAsync(User user, MainMessage message)
+        private async Task SendMessageAsync(User user, MainMessage message, int pageNumber)
         {
             InlineKeyboardMarkup inlineKeyboard = null;
             var isOversizeMessage = false;
@@ -166,11 +174,11 @@ namespace StockExchange
             else
             {
                 List<string> buttons = await message.OnSend();
-                const int limit = 100;
+                const int limit = 95;
                 if (buttons.Count > limit)
                 {
                     
-                    await SendOversizeMessageAsync(buttons, limit, inlineKeyboard, user, message);
+                    await SendOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message);
                     isOversizeMessage = true;
                 }
                 else
@@ -191,6 +199,8 @@ namespace StockExchange
             int offset = 0;
             #region Set offset considering old updates
             var oldUpdates = await _bot.GetUpdatesAsync(0);
+            int pageNumber = 0;//для текста, превышающего лимит
+            MainMessage intermediateMessageBetweenPages = null;
             if(oldUpdates.Length != 0)
             {
                 offset = oldUpdates[oldUpdates.Length - 1].Id + 1;
@@ -243,9 +253,9 @@ namespace StockExchange
                                         break;
                                     }
                                 }
-                            } else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType())
+                            } else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
                             {
-                                if (update.CallbackQuery.Data != new Back().Message)
+                                if (update.CallbackQuery.Data != new Back().Message && update.CallbackQuery.Data != new Previous().Message && update.CallbackQuery.Data != new Next().Message)
                                 {
                                     foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
                                     {
@@ -259,12 +269,28 @@ namespace StockExchange
                                 }
                             }
                         }
-                        if(message.GetType() == new ChooseMarketSymbol().GetType())
+                        if (message.GetType() == new ChooseMarketSymbol().GetType())
                         {
                             message.ExchangeAPI = user.StockExchange;
+                            intermediateMessageBetweenPages = message;
+                            pageNumber = 0;
+                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
                         }
-                        //onsend для вывода
-                        await SendMessageAsync(user, message);
+                        else if (message.GetType() == new Previous().GetType())
+                        {
+                            --pageNumber;
+                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
+                        }
+                        else if (message.GetType() == new Next().GetType())
+                        {
+                            ++pageNumber;
+                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
+                        }
+                        else
+                        {
+                            pageNumber = 0;
+                            await SendMessageAsync(user, message, pageNumber);
+                        }
                         previousMessage = message;
                         offset = updates[updates.Length - 1].Id + 1;
                     }
