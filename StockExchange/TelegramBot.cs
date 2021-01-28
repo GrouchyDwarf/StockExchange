@@ -1,0 +1,275 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+using ExchangeSharp;
+using Telegram.Bot;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.ReplyMarkups;
+using StockExchange.Messages;
+using System.Threading.Tasks;
+using StockExchange.Information;
+using System.Linq;
+
+namespace StockExchange
+{
+    class TelegramBot
+    {
+        private readonly IInteractive _interactive;
+        private string _key;
+        private TelegramBotClient _bot;
+        List<User> _users;
+        private List<MainMessage> _messages;//bot states
+        private readonly StockExchanges _stockExchanges;
+
+        public TelegramBot(IInteractive interactive, string key)
+        {
+            _interactive = interactive;
+            _key = key;
+
+            try
+            {
+                _bot = new TelegramBotClient(_key);
+            } 
+            catch(System.ArgumentException exception)
+            {
+                _interactive.OutputAsync(exception.Message);
+            }
+
+            _users = new List<User>();
+
+            _messages = new List<MainMessage>()
+            {
+                new Start(),
+                new ChooseStockExchange(),
+                new ChooseMarketSymbol(),
+                new Clear(),
+                new Back()
+            };
+            _stockExchanges = new StockExchanges();
+        }
+
+        private List<List<InlineKeyboardButton>> Convert_ButtonNames_ToInlineButtons(List<string> buttonNames)
+        {
+            var buttons = new List<List<InlineKeyboardButton>>();
+            foreach(var buttonName in buttonNames)
+            {
+                buttons.Add(new List<InlineKeyboardButton> { new InlineKeyboardButton() { Text = buttonName, CallbackData = buttonName }});
+            }
+            return buttons;
+        }
+
+        private long GetChatId(Update update)
+        {
+            return update.Message == null ? update.CallbackQuery.From.Id : update.Message.Chat.Id;
+        }
+
+        private User GetUser(long chatId)
+        {
+            foreach (var user in _users)
+            {
+                if (user.ChatId == chatId)
+                {
+                    return user;
+                }
+            }
+            User _user;
+            _users.Add(_user = new User(chatId));
+            return _user;
+        }
+
+        private async Task SendFirstMessageAsync(User user, long chatId)
+        {
+            var replyKeyboard = new ReplyKeyboardMarkup
+            {
+                Keyboard = new List<List<KeyboardButton>>
+                                {
+                                    new List<KeyboardButton>{new KeyboardButton(new Start().Message)},
+                                    new List<KeyboardButton>{new KeyboardButton(new Clear().Message)}
+                                }
+            };
+            await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup: replyKeyboard);
+            user.IsFirstMessage = false;
+        }
+        //Determine the type of command.And if command exist
+        private MainMessage GetMessage(string text, out bool ifMessageExist)
+        {
+            ifMessageExist = false;
+            foreach (var message in _messages)
+            {
+                if (message.Message == text)
+                {
+                    ifMessageExist = true;
+                    return message;
+                }
+            }
+            return null;
+        }
+        //выводит все одной страницей
+        /*private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
+        {
+            int modulo = buttons.Count % limit;
+            for (int i = 0; i < Math.Ceiling((decimal)(buttons.Count / limit)); ++i)
+            {
+                var partButtons = new List<string>();
+                if (i != Math.Ceiling((decimal)(buttons.Count / limit)) - 1)
+                {
+                    for (int j = i * limit; j < (i + 1) * limit; ++j)
+                    {
+                        partButtons.Add(buttons[j]);
+                    }
+                }
+                else
+                {
+                    for (int j = (i + 1) * limit; j < (i + 1) * limit + modulo; ++j)
+                    {
+                        partButtons.Add(buttons[j]);
+                    }
+                }
+                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
+                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+            }
+        }*/
+
+        private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
+        {
+            int modulo = buttons.Count % limit;
+            for (int i = 0; i < Math.Ceiling((decimal)(buttons.Count / limit)); ++i)
+            {
+                var partButtons = new List<string>();
+                if (i != Math.Ceiling((decimal)(buttons.Count / limit)) - 1)
+                {
+                    for (int j = i * limit; j < (i + 1) * limit; ++j)
+                    {
+                        partButtons.Add(buttons[j]);
+                    }
+                }
+                else
+                {
+                    for (int j = (i + 1) * limit; j < (i + 1) * limit + modulo; ++j)
+                    {
+                        partButtons.Add(buttons[j]);
+                    }
+                }
+                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
+                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+            }
+        }
+
+        private async Task SendMessageAsync(User user, MainMessage message)
+        {
+            InlineKeyboardMarkup inlineKeyboard = null;
+            var isOversizeMessage = false;
+            if (user.StockExchange == null && (message.Message == new Start().Message || message.Message == new Back().Message))
+            {
+                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(new List<string>() { new ChooseStockExchange().Message }));
+            }
+            else
+            {
+                List<string> buttons = await message.OnSend();
+                const int limit = 100;
+                if (buttons.Count > limit)
+                {
+                    
+                    await SendOversizeMessageAsync(buttons, limit, inlineKeyboard, user, message);
+                    isOversizeMessage = true;
+                }
+                else
+                {
+                    inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(await message.OnSend()));
+                }
+            }
+            if (!isOversizeMessage)
+            {
+                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+            }
+        }
+
+        //todo:автоматизировать update
+        //     на каждом обновлении определять пользователя и работать именно с ним
+        public async Task Run()
+        {
+            int offset = 0;
+            #region Set offset considering old updates
+            var oldUpdates = await _bot.GetUpdatesAsync(0);
+            if(oldUpdates.Length != 0)
+            {
+                offset = oldUpdates[oldUpdates.Length - 1].Id + 1;
+            }
+            #endregion
+            MainMessage previousMessage = null;
+            while (true)
+            {
+                var updates = await _bot.GetUpdatesAsync(offset);
+                if(updates.Length != 0)
+                {
+                    foreach (var update in updates)
+                    {
+                        long chatId = GetChatId(update);
+                        User user = GetUser(chatId);
+                        if (user.IsFirstMessage)
+                        {
+                            await SendFirstMessageAsync(user, chatId);
+                        }
+                        MainMessage message = null;
+                        if (update.Message != null)
+                        {    
+                            message = GetMessage(update.Message.Text, out bool ifMessageExist);
+                            if (!ifMessageExist && !update.Message.From.IsBot)
+                            {
+                                await _bot.SendTextMessageAsync(update.Message.Chat.Id, "Выберите команду из предоставленных");
+                                continue;
+                            }
+                        }
+                        else
+                        {   
+                            //todo: сделать переменные чтобы не писать постоянно new
+                            //       убрать повторы foreach(в функцию)
+                            message = GetMessage(update.CallbackQuery.Data, out bool ifMessageExist);
+                            /*if (!ifMessageExist && !update.CallbackQuery.From.IsBot)
+                            {
+                                await _bot.SendTextMessageAsync(update.CallbackQuery.From.Id, "Выберите команду из предоставленных");
+                                continue;
+                                
+                            }*/
+                            //ифы для записи в user
+                            if(previousMessage.GetType() == new ChooseStockExchange().GetType())
+                            {
+                                foreach (var stockExchange in new StockExchanges().StockExchangesList)
+                                {
+                                    if (update.CallbackQuery.Data == stockExchange.Name)
+                                    {
+                                        user.StockExchange = stockExchange;
+                                        message = new Start();
+                                        break;
+                                    }
+                                }
+                            } else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType())
+                            {
+                                if (update.CallbackQuery.Data != new Back().Message)
+                                {
+                                    foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
+                                    {
+                                        if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(update.CallbackQuery.Data) == marketSymbol)
+                                        {
+                                            user.MarketSymbol = marketSymbol;
+                                            message = new Start();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if(message.GetType() == new ChooseMarketSymbol().GetType())
+                        {
+                            message.ExchangeAPI = user.StockExchange;
+                        }
+                        //onsend для вывода
+                        await SendMessageAsync(user, message);
+                        previousMessage = message;
+                        offset = updates[updates.Length - 1].Id + 1;
+                    }
+                }
+            }
+        }
+    }
+}

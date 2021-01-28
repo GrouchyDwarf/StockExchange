@@ -430,14 +430,14 @@ namespace ExchangeSharp
             });
         }
 
-		protected override async Task<IWebSocket> OnGetCandlesWebSocketAsync(Func<KeyValuePair<string, MarketCandle>> callback, params string[] marketSymbols)
+		/*protected override async Task<IWebSocket> OnGetCandlesWebSocketAsync(Func<KeyValuePair<string, MarketCandle>> callback, params string[] marketSymbols)
 		{
 			if(marketSymbols == null || marketSymbols.Length == 0)
 			{
 				marketSymbols = (await GetMarketSymbolsAsync()).ToArray();
 			}
 
-			var candles = new List<MarketCandle>();//придумать логику,т.к. по циклу бежать не будет
+			var candles = new List<MarketCandle>();
 			return await OnGetTradesWebSocketAsync(trade =>
 			{
 				if (marketSymbols.Contains(trade.Key))
@@ -462,7 +462,7 @@ namespace ExchangeSharp
 				}
 				return Task.CompletedTask;
 			});
-		}
+		}*/
 
         private ExchangeTrade ParseTradeWebSocket(JToken token)
         {

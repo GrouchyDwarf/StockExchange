@@ -1,4 +1,6 @@
 ﻿
+using System.ComponentModel;
+
 namespace StockExchange
 {
     partial class MainForm
