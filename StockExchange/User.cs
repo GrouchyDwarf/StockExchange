@@ -9,7 +9,7 @@ namespace StockExchange
     class User
     {
         public ExchangeAPI StockExchange { get; set; }
-        public string MarketSymbol { get; set; }
+        public List<string> MarketSymbols { get; set; }
         public string DataType { get; set; }
         public Message LastSentMessage { get; set; }
 
@@ -20,6 +20,7 @@ namespace StockExchange
         public User(long chatId)
         {
             ChatId = chatId;
+            MarketSymbols = new List<string>();
         }
     }
 }

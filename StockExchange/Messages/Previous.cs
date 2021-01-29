@@ -6,6 +6,6 @@ namespace StockExchange.Messages
 {
     class Previous:MainMessage
     {
-        public override string Message { get; } = Char.ConvertFromUtf32(9194) + "Предыдущая";
+        public override string Message { get; } = Emoji.PreviousArrow + "Предыдущая";
     }
 }

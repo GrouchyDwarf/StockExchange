@@ -12,6 +12,12 @@ using System.Linq;
 
 namespace StockExchange
 {
+    public struct Emoji
+    {
+        public static string CheckMark = Char.ConvertFromUtf32(9989);
+        public static string PreviousArrow = Char.ConvertFromUtf32(9194);
+        public static string NextArrow = Char.ConvertFromUtf32(9193);
+    }
     class TelegramBot
     {
         private readonly IInteractive _interactive;
@@ -175,6 +181,19 @@ namespace StockExchange
             {
                 List<string> buttons = await message.OnSend();
                 const int limit = 95;
+                if(user.MarketSymbols.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
+                {
+                    foreach(var selectedMarketSymbol in user.MarketSymbols)
+                    {
+                        for(var marketSymbol = 0; marketSymbol < buttons.Count; ++marketSymbol)
+                        {
+                            if(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol) == buttons[marketSymbol])
+                            {
+                                buttons[marketSymbol] = buttons[marketSymbol] + Emoji.CheckMark;
+                            }
+                        }
+                    }
+                }
                 if (buttons.Count > limit)
                 {
                     
@@ -192,8 +211,7 @@ namespace StockExchange
             }
         }
 
-        //todo:автоматизировать update
-        //     на каждом обновлении определять пользователя и работать именно с ним
+        //todo:подумать над неправильным вводом без кнопок
         public async Task Run()
         {
             int offset = 0;
@@ -249,19 +267,38 @@ namespace StockExchange
                                     if (update.CallbackQuery.Data == stockExchange.Name)
                                     {
                                         user.StockExchange = stockExchange;
+                                        user.MarketSymbols.Clear();
                                         message = new Start();
                                         break;
                                     }
                                 }
-                            } else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
+                            } 
+                            else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
                             {
                                 if (update.CallbackQuery.Data != new Back().Message && update.CallbackQuery.Data != new Previous().Message && update.CallbackQuery.Data != new Next().Message)
                                 {
                                     foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
                                     {
-                                        if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(update.CallbackQuery.Data) == marketSymbol)
+                                        string currentSymbol = update.CallbackQuery.Data;
+                                        if (update.CallbackQuery.Data.Contains(Emoji.CheckMark))
                                         {
-                                            user.MarketSymbol = marketSymbol;
+                                            currentSymbol = currentSymbol.Remove(currentSymbol.IndexOf(Emoji.CheckMark));
+                                        }
+                                        if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(currentSymbol) == marketSymbol)
+                                        {
+                                            var marketSymbolIsAlreadyRecorded = false;
+                                            foreach(var oldMarketSymbol in user.MarketSymbols)
+                                            {
+                                                if(oldMarketSymbol== marketSymbol)
+                                                {
+                                                    marketSymbolIsAlreadyRecorded = true;
+                                                    break;
+                                                }
+                                            }
+                                            if (!marketSymbolIsAlreadyRecorded)
+                                            {
+                                                user.MarketSymbols.Add(marketSymbol);
+                                            }
                                             message = new Start();
                                             break;
                                         }
