@@ -10,7 +10,7 @@ namespace StockExchange
     {
         public ExchangeAPI StockExchange { get; set; }
         public List<string> MarketSymbols { get; set; }
-        public string DataType { get; set; }
+        public List<string> DataTypes { get; set; }
         public Message LastSentMessage { get; set; }
 
         public bool IsFirstMessage { get; set; } = true;
@@ -21,6 +21,7 @@ namespace StockExchange
         {
             ChatId = chatId;
             MarketSymbols = new List<string>();
+            DataTypes = new List<string>();
         }
     }
 }

@@ -51,7 +51,8 @@ namespace StockExchange
                 new Clear(),
                 new Back(),
                 new Previous(),
-                new Next()
+                new Next(),
+                new ChooseDataType()
             };
             _stockExchanges = new StockExchanges();
         }
@@ -169,6 +170,21 @@ namespace StockExchange
             await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
         }
 
+        public List<string> MarkButtons(List<string> allStrings, List<string> selectedStrings, string mark)
+        {
+            foreach(var selectedString in selectedStrings)
+            {
+                for(var i = 0; i < allStrings.Count; ++i)
+                {
+                    if(selectedString == allStrings[i])
+                    {
+                        allStrings[i] = allStrings[i] + mark;
+                    }
+                }
+            }
+            return allStrings;
+        }
+
         private async Task SendMessageAsync(User user, MainMessage message, int pageNumber)
         {
             InlineKeyboardMarkup inlineKeyboard = null;
@@ -183,16 +199,16 @@ namespace StockExchange
                 const int limit = 95;
                 if(user.MarketSymbols.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
                 {
+                    var globalSelectedSymbols = new List<string>();
                     foreach(var selectedMarketSymbol in user.MarketSymbols)
                     {
-                        for(var marketSymbol = 0; marketSymbol < buttons.Count; ++marketSymbol)
-                        {
-                            if(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol) == buttons[marketSymbol])
-                            {
-                                buttons[marketSymbol] = buttons[marketSymbol] + Emoji.CheckMark;
-                            }
-                        }
+                        globalSelectedSymbols.Add(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol));
                     }
+                    buttons = MarkButtons(buttons, globalSelectedSymbols, Emoji.CheckMark);
+                } 
+                else if(user.DataTypes.Count > 0 && message.GetType() == new ChooseDataType().GetType())
+                {
+                    buttons = MarkButtons(buttons, user.DataTypes, Emoji.CheckMark);
                 }
                 if (buttons.Count > limit)
                 {
@@ -202,13 +218,36 @@ namespace StockExchange
                 }
                 else
                 {
-                    inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(await message.OnSend()));
+                    inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(buttons));
                 }
             }
             if (!isOversizeMessage)
             {
                 await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
             }
+        }
+
+        private bool CheckIfRecorded(List<string> records, string newRecord)
+        {
+            var isAlreadyRecorded = false;
+            foreach (var record in records)
+            {
+                if (record == newRecord)
+                {
+                    isAlreadyRecorded = true;
+                    break;
+                }
+            }
+            return isAlreadyRecorded;
+        }
+
+        private string DeleteMark(string record, string mark)
+        {
+            if (record.Contains(mark))
+            {
+                return record.Remove(record.IndexOf(mark));
+            }
+            return record;
         }
 
         //todo:подумать над неправильным вводом без кнопок
@@ -279,25 +318,31 @@ namespace StockExchange
                                 {
                                     foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
                                     {
-                                        string currentSymbol = update.CallbackQuery.Data;
-                                        if (update.CallbackQuery.Data.Contains(Emoji.CheckMark))
-                                        {
-                                            currentSymbol = currentSymbol.Remove(currentSymbol.IndexOf(Emoji.CheckMark));
-                                        }
+                                        string currentSymbol = DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
                                         if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(currentSymbol) == marketSymbol)
                                         {
-                                            var marketSymbolIsAlreadyRecorded = false;
-                                            foreach(var oldMarketSymbol in user.MarketSymbols)
-                                            {
-                                                if(oldMarketSymbol== marketSymbol)
-                                                {
-                                                    marketSymbolIsAlreadyRecorded = true;
-                                                    break;
-                                                }
-                                            }
-                                            if (!marketSymbolIsAlreadyRecorded)
+                                            if (!CheckIfRecorded(user.MarketSymbols, marketSymbol))
                                             {
                                                 user.MarketSymbols.Add(marketSymbol);
+                                            }
+                                            message = new Start();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            else if(previousMessage.GetType() == new ChooseDataType().GetType())
+                            {
+                                if (update.CallbackQuery.Data != new Back().Message)
+                                {
+                                    string currentData = DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
+                                    foreach (var dataType in await new ChooseDataType().OnSend())
+                                    {
+                                        if (currentData == dataType)
+                                        {
+                                            if (!CheckIfRecorded(user.DataTypes, dataType))
+                                            {
+                                                user.DataTypes.Add(dataType);
                                             }
                                             message = new Start();
                                             break;
