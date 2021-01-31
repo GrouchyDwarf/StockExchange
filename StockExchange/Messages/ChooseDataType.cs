@@ -13,9 +13,9 @@ namespace StockExchange.Messages
         {
             return await Task.FromResult(new List<string>()
             {
-                "Trades",
+                "Trade",
                 "Tickers",
-                "Candles",
+                "Candle",
                 "Назад"
             });
         }

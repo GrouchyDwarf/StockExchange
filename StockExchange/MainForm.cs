@@ -53,9 +53,9 @@ public MainForm()
     _stockExchanges.Add(new ExchangeCoinbaseAPI());
     _stockExchanges.Add(new ExchangePoloniexAPI());
     _dataTypes = new List<string>();
-    _dataTypes.Add("Trades");
+    _dataTypes.Add("Trade");
     _dataTypes.Add("Tickers");
-    _dataTypes.Add("Candles");
+    _dataTypes.Add("Candle");
 }
 private async void RunButton_Click(object sender, EventArgs e)
 {
@@ -165,7 +165,7 @@ private async void RunButton_Click(object sender, EventArgs e)
                         }
                         else
                         {
-                            if (_dataType == "Trades")
+                            if (_dataType == "Trade")
                             {
                                 //var trades = 
                                 await _stockExchange.GetTradesWebSocketAsync(async trade =>
@@ -207,7 +207,7 @@ private async void RunButton_Click(object sender, EventArgs e)
                                     }
                                 }//, await _stockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(_globalSymbol));
                             }
-                            else if (_dataType == "Candles")
+                            else if (_dataType == "Candle")
                             {
                                 var candle = new MarketCandle();
                                 await _stockExchange.GetTradesWebSocketAsync(async trade =>

@@ -197,10 +197,10 @@ namespace StockExchange
             {
                 List<string> buttons = await message.OnSend();
                 const int limit = 95;
-                if(user.MarketSymbols.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
+                if(user.Data.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
                 {
                     var globalSelectedSymbols = new List<string>();
-                    foreach(var selectedMarketSymbol in user.MarketSymbols)
+                    foreach(var selectedMarketSymbol in user.Data.Select(d => d.MarketSymbol).ToList())
                     {
                         globalSelectedSymbols.Add(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol));
                     }
@@ -248,6 +248,72 @@ namespace StockExchange
                 return record.Remove(record.IndexOf(mark));
             }
             return record;
+        }
+
+        private async Task OnGetDataFromWebSockets()
+        {
+            foreach (var user in _users)
+            {
+                if (user.DataTypes.Count > 0 && user.Data.Count > 0)
+                {
+                    foreach (var dataType in user.DataTypes)
+                    {
+                        foreach (var data in user.Data)
+                        {
+                            if (dataType == new Trades().Message)
+                            {
+                                await user.StockExchange.GetTradesWebSocketAsync(async trade =>
+                                {
+                                    await Task.FromResult(data.Trade = $"Ticker {trade.Key}\nPrice:{trade.Value.Price}; Amount:{trade.Value.Amount}");
+                                }, data.MarketSymbol);
+                            }
+                            else if (dataType == new Tickers().Message)
+                            {
+                                await user.StockExchange.GetTickersWebSocketAsync(async tickers =>
+                                {
+                                    foreach (var ticker in tickers)
+                                    {
+                                        await Task.FromResult(data.Ticker = $"Ticker {ticker.Key}; Value: {ticker.Value}");
+                                    }
+                                }, data.MarketSymbol);
+                            }
+                            else if(dataType == new Candles().Message)
+                            {
+                                var candle = new MarketCandle();
+                                await user.StockExchange.GetTradesWebSocketAsync(async trade =>
+                                {
+                                if (candle.ExchangeName == data.MarketSymbol)
+                                {
+                                    candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
+                                    candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
+                                    candle.ClosePrice = trade.Value.Price;
+                                    await Task.FromResult(data.Candle = $"Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}");
+                                    }
+                                    else
+                                    {
+                                        candle.ExchangeName = trade.Key;
+                                        candle.OpenPrice = trade.Value.Price;
+                                        candle.LowPrice = trade.Value.Price;
+                                        await Task.FromResult(data.Candle = $"Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}");
+                                    }
+                                }, data.MarketSymbol);
+                            }
+                            string resultMessage = data.Ticker + "\n" + data.Trade + "\n" + data.Candle;
+                            if (!string.IsNullOrWhiteSpace(resultMessage))
+                            {
+                                if (data.Message == null)
+                                {
+                                    data.Message = await _bot.SendTextMessageAsync(user.ChatId, resultMessage);
+                                }
+                                else if (data.Message.Text != resultMessage.Trim())
+                                {
+                                    data.Message = await _bot.EditMessageTextAsync(user.ChatId, data.Message.MessageId, resultMessage);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         //todo:подумать над неправильным вводом без кнопок
@@ -306,7 +372,7 @@ namespace StockExchange
                                     if (update.CallbackQuery.Data == stockExchange.Name)
                                     {
                                         user.StockExchange = stockExchange;
-                                        user.MarketSymbols.Clear();
+                                        user.Data.Clear();
                                         message = new Start();
                                         break;
                                     }
@@ -321,9 +387,9 @@ namespace StockExchange
                                         string currentSymbol = DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
                                         if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(currentSymbol) == marketSymbol)
                                         {
-                                            if (!CheckIfRecorded(user.MarketSymbols, marketSymbol))
+                                            if (!CheckIfRecorded(user.Data.Select(d => d.MarketSymbol).ToList(), marketSymbol))
                                             {
-                                                user.MarketSymbols.Add(marketSymbol);
+                                                user.Data.Add(new Data { MarketSymbol = marketSymbol });
                                             }
                                             message = new Start();
                                             break;
@@ -377,6 +443,7 @@ namespace StockExchange
                         offset = updates[updates.Length - 1].Id + 1;
                     }
                 }
+                await OnGetDataFromWebSockets();
             }
         }
     }
