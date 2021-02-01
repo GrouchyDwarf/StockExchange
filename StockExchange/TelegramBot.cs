@@ -86,7 +86,7 @@ namespace StockExchange
             return _user;
         }
 
-        private async Task SendFirstMessageAsync(User user, long chatId)
+        private async Task<(int textMessageId, int replyMarkupMessageId)> SendFirstMessageAsync(User user, long chatId)
         {
             var replyKeyboard = new ReplyKeyboardMarkup
             {
@@ -97,7 +97,10 @@ namespace StockExchange
                                 }
             };
             await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup: replyKeyboard);
+            var textMessage = await _bot.SendTextMessageAsync(chatId, "Главная");
+            var replyMarkupMessage = await _bot.SendTextMessageAsync(chatId, "Button", replyMarkup: new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(new List<string> { "Начать"})));
             user.IsFirstMessage = false;
+            return await Task.FromResult((textMessage.MessageId, replyMarkupMessage.MessageId));
         }
         //Determine the type of command.And if command exist
         private MainMessage GetMessage(string text, out bool ifMessageExist)
@@ -139,7 +142,7 @@ namespace StockExchange
             }
         }
         //выводит несколькими страницами
-        private async Task SendOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
+        private async Task EditOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message, int textMessageId, int replyMarkupMessageId)
         {
             int modulo = buttons.Count % limit;
             var partButtons = new List<string>();
@@ -167,7 +170,8 @@ namespace StockExchange
                 partButtons.Add(new Previous().Message);
             }
             inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
-            await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+            await _bot.EditMessageTextAsync(user.ChatId, textMessageId, message.Message);
+            await _bot.EditMessageReplyMarkupAsync(user.ChatId, replyMarkupMessageId, replyMarkup:inlineKeyboard);
         }
 
         public List<string> MarkButtons(List<string> allStrings, List<string> selectedStrings, string mark)
@@ -185,7 +189,7 @@ namespace StockExchange
             return allStrings;
         }
 
-        private async Task SendMessageAsync(User user, MainMessage message, int pageNumber)
+        private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int textMessageId, int replyMarkupMessageId)
         {
             InlineKeyboardMarkup inlineKeyboard = null;
             var isOversizeMessage = false;
@@ -213,7 +217,7 @@ namespace StockExchange
                 if (buttons.Count > limit)
                 {
                     
-                    await SendOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message);
+                    await EditOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message, textMessageId, replyMarkupMessageId);
                     isOversizeMessage = true;
                 }
                 else
@@ -223,7 +227,16 @@ namespace StockExchange
             }
             if (!isOversizeMessage)
             {
-                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
+                /*try
+                {
+                    await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message, replyMarkup: inlineKeyboard);
+                }
+                catch(Telegram.Bot.Exceptions.ApiRequestException ex)
+                {
+                    await _interactive.OutputAsync(ex.Message);
+                }*/
+                await _bot.EditMessageTextAsync(user.ChatId, textMessageId, message.Message);
+                await _bot.EditMessageReplyMarkupAsync(user.ChatId, replyMarkupMessageId, inlineKeyboard);
             }
         }
 
@@ -328,6 +341,8 @@ namespace StockExchange
             {
                 offset = oldUpdates[oldUpdates.Length - 1].Id + 1;
             }
+            int textMessageId = 0;
+            int replyMarkupMessageId = 0;
             #endregion
             MainMessage previousMessage = null;
             while (true)
@@ -341,7 +356,7 @@ namespace StockExchange
                         User user = GetUser(chatId);
                         if (user.IsFirstMessage)
                         {
-                            await SendFirstMessageAsync(user, chatId);
+                            (textMessageId, replyMarkupMessageId) = await SendFirstMessageAsync(user, chatId);
                         }
                         MainMessage message = null;
                         if (update.Message != null)
@@ -355,8 +370,6 @@ namespace StockExchange
                         }
                         else
                         {   
-                            //todo: сделать переменные чтобы не писать постоянно new
-                            //       убрать повторы foreach(в функцию)
                             message = GetMessage(update.CallbackQuery.Data, out bool ifMessageExist);
                             /*if (!ifMessageExist && !update.CallbackQuery.From.IsBot)
                             {
@@ -422,22 +435,22 @@ namespace StockExchange
                             message.ExchangeAPI = user.StockExchange;
                             intermediateMessageBetweenPages = message;
                             pageNumber = 0;
-                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
                         }
                         else if (message.GetType() == new Previous().GetType())
                         {
                             --pageNumber;
-                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
                         }
                         else if (message.GetType() == new Next().GetType())
                         {
                             ++pageNumber;
-                            await SendMessageAsync(user, intermediateMessageBetweenPages, pageNumber);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
                         }
                         else
                         {
                             pageNumber = 0;
-                            await SendMessageAsync(user, message, pageNumber);
+                            await EditMessageAsync(user, message, pageNumber, textMessageId, replyMarkupMessageId);
                         }
                         previousMessage = message;
                         offset = updates[updates.Length - 1].Id + 1;
