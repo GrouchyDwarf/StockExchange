@@ -13,9 +13,9 @@ namespace StockExchange.Messages
         {
             return await Task.FromResult(new List<string>() 
             {
-                "Выбрать биржу",
-                "Выбрать символ",
-                "Выбрать тип вебсокета"
+                new ChooseStockExchange().Message,
+                new ChooseMarketSymbol().Message,
+                new ChooseDataType().Message
             });
         }
     }

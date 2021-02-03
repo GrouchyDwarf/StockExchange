@@ -241,6 +241,11 @@ namespace ExchangeSharp.BinanceGroup
 
 		protected override Task<IWebSocket> OnGetTickersWebSocketAsync(Action<IReadOnlyCollection<KeyValuePair<string, ExchangeTicker>>> callback, params string[] symbols)
 		{
+			HashSet<string> filter = new HashSet<string>();
+			foreach (string marketSymbol in symbols)
+			{
+				filter.Add(marketSymbol);
+			}
 			return ConnectWebSocketAsync("/stream?streams=!ticker@arr", async (_socket, msg) =>
 			{
 				JToken token = JToken.Parse(msg.ToStringFromUTF8());
@@ -249,6 +254,10 @@ namespace ExchangeSharp.BinanceGroup
 				foreach (JToken childToken in token["data"])
 				{
 					ticker = await ParseTickerWebSocketAsync(childToken);
+					if (filter.Count != 0 && !filter.Contains(ticker.MarketSymbol))
+					{
+						continue;
+					}
 					tickerList.Add(new KeyValuePair<string, ExchangeTicker>(ticker.MarketSymbol, ticker));
 				}
 				if (tickerList.Count != 0)

@@ -35,8 +35,8 @@ namespace StockExchange
             try
             {
                 _bot = new TelegramBotClient(_key);
-            } 
-            catch(System.ArgumentException exception)
+            }
+            catch (System.ArgumentException exception)
             {
                 _interactive.OutputAsync(exception.Message);
             }
@@ -60,9 +60,9 @@ namespace StockExchange
         private List<List<InlineKeyboardButton>> Convert_ButtonNames_ToInlineButtons(List<string> buttonNames)
         {
             var buttons = new List<List<InlineKeyboardButton>>();
-            foreach(var buttonName in buttonNames)
+            foreach (var buttonName in buttonNames)
             {
-                buttons.Add(new List<InlineKeyboardButton> { new InlineKeyboardButton() { Text = buttonName, CallbackData = buttonName }});
+                buttons.Add(new List<InlineKeyboardButton> { new InlineKeyboardButton() { Text = buttonName, CallbackData = buttonName } });
             }
             return buttons;
         }
@@ -86,7 +86,7 @@ namespace StockExchange
             return _user;
         }
 
-        private async Task<(int textMessageId, int replyMarkupMessageId)> SendFirstMessageAsync(User user, long chatId)
+        private async Task<int> SendFirstMessageAsync(User user, long chatId)
         {
             var replyKeyboard = new ReplyKeyboardMarkup
             {
@@ -97,10 +97,9 @@ namespace StockExchange
                                 }
             };
             await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup: replyKeyboard);
-            var textMessage = await _bot.SendTextMessageAsync(chatId, "Главная");
-            var replyMarkupMessage = await _bot.SendTextMessageAsync(chatId, "Button", replyMarkup: new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(new List<string> { "Начать"})));
+            var message = await _bot.SendTextMessageAsync(chatId, "Главная");
             user.IsFirstMessage = false;
-            return await Task.FromResult((textMessage.MessageId, replyMarkupMessage.MessageId));
+            return await Task.FromResult(message.MessageId);
         }
         //Determine the type of command.And if command exist
         private MainMessage GetMessage(string text, out bool ifMessageExist)
@@ -142,45 +141,45 @@ namespace StockExchange
             }
         }
         //выводит несколькими страницами
-        private async Task EditOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message, int textMessageId, int replyMarkupMessageId)
+        private async Task EditOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message, int messageId)
         {
             int modulo = buttons.Count % limit;
             var partButtons = new List<string>();
             decimal totalNumberPages = Math.Ceiling((decimal)(buttons.Count / limit)) - 1;
-            if(pageNumber != totalNumberPages)
+            if (pageNumber != totalNumberPages)
             {
-                for(int j = pageNumber * limit; j < (pageNumber + 1) * limit; ++j)
+                for (int j = pageNumber * limit; j < (pageNumber + 1) * limit; ++j)
                 {
                     partButtons.Add(buttons[j]);
                 }
             }
             else
             {
-                for(int j = (pageNumber + 1) * limit; j < (pageNumber + 1) * limit + modulo; ++j)
+                for (int j = (pageNumber + 1) * limit; j < (pageNumber + 1) * limit + modulo; ++j)
                 {
                     partButtons.Add(buttons[j]);
                 }
             }
-            if (pageNumber < totalNumberPages) 
+            if (pageNumber < totalNumberPages)
             {
                 partButtons.Add(new Next().Message);
             }
-            if(pageNumber > 0)
+            if (pageNumber > 0)
             {
                 partButtons.Add(new Previous().Message);
             }
             inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
-            await _bot.EditMessageTextAsync(user.ChatId, textMessageId, message.Message);
-            await _bot.EditMessageReplyMarkupAsync(user.ChatId, replyMarkupMessageId, replyMarkup:inlineKeyboard);
+            await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
+            await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, replyMarkup: inlineKeyboard);
         }
 
         public List<string> MarkButtons(List<string> allStrings, List<string> selectedStrings, string mark)
         {
-            foreach(var selectedString in selectedStrings)
+            foreach (var selectedString in selectedStrings)
             {
-                for(var i = 0; i < allStrings.Count; ++i)
+                for (var i = 0; i < allStrings.Count; ++i)
                 {
-                    if(selectedString == allStrings[i])
+                    if (selectedString == allStrings[i])
                     {
                         allStrings[i] = allStrings[i] + mark;
                     }
@@ -189,7 +188,7 @@ namespace StockExchange
             return allStrings;
         }
 
-        private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int textMessageId, int replyMarkupMessageId)
+        private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int messageId)
         {
             InlineKeyboardMarkup inlineKeyboard = null;
             var isOversizeMessage = false;
@@ -201,23 +200,23 @@ namespace StockExchange
             {
                 List<string> buttons = await message.OnSend();
                 const int limit = 95;
-                if(user.Data.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
+                if (user.Data.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
                 {
                     var globalSelectedSymbols = new List<string>();
-                    foreach(var selectedMarketSymbol in user.Data.Select(d => d.MarketSymbol).ToList())
+                    foreach (var selectedMarketSymbol in user.Data.Select(d => d.MarketSymbol).ToList())
                     {
                         globalSelectedSymbols.Add(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol));
                     }
                     buttons = MarkButtons(buttons, globalSelectedSymbols, Emoji.CheckMark);
-                } 
-                else if(user.DataTypes.Count > 0 && message.GetType() == new ChooseDataType().GetType())
+                }
+                else if (user.DataTypes.Count > 0 && message.GetType() == new ChooseDataType().GetType())
                 {
                     buttons = MarkButtons(buttons, user.DataTypes, Emoji.CheckMark);
                 }
                 if (buttons.Count > limit)
                 {
-                    
-                    await EditOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message, textMessageId, replyMarkupMessageId);
+
+                    await EditOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message, messageId);
                     isOversizeMessage = true;
                 }
                 else
@@ -227,16 +226,8 @@ namespace StockExchange
             }
             if (!isOversizeMessage)
             {
-                /*try
-                {
-                    await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message, replyMarkup: inlineKeyboard);
-                }
-                catch(Telegram.Bot.Exceptions.ApiRequestException ex)
-                {
-                    await _interactive.OutputAsync(ex.Message);
-                }*/
-                await _bot.EditMessageTextAsync(user.ChatId, textMessageId, message.Message);
-                await _bot.EditMessageReplyMarkupAsync(user.ChatId, replyMarkupMessageId, inlineKeyboard);
+                await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
+                await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, inlineKeyboard);
             }
         }
 
@@ -282,6 +273,7 @@ namespace StockExchange
                             }
                             else if (dataType == new Tickers().Message)
                             {
+                                //todo:добавить фильтр в библиотеку,где его нет
                                 await user.StockExchange.GetTickersWebSocketAsync(async tickers =>
                                 {
                                     foreach (var ticker in tickers)
@@ -290,28 +282,39 @@ namespace StockExchange
                                     }
                                 }, data.MarketSymbol);
                             }
-                            else if(dataType == new Candles().Message)
+                            else if (dataType == new Candles().Message)
                             {
-                                var candle = new MarketCandle();
                                 await user.StockExchange.GetTradesWebSocketAsync(async trade =>
                                 {
-                                if (candle.ExchangeName == data.MarketSymbol)
-                                {
-                                    candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
-                                    candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
-                                    candle.ClosePrice = trade.Value.Price;
-                                    await Task.FromResult(data.Candle = $"Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}");
+                                    if (data.Candle != null)
+                                    {
+                                        data.Candle.HighPrice = Math.Max(data.Candle.HighPrice, trade.Value.Price);
+                                        data.Candle.LowPrice = Math.Min(data.Candle.LowPrice, trade.Value.Price);
+                                        await Task.FromResult(data.Candle.ClosePrice = trade.Value.Price);
                                     }
                                     else
                                     {
-                                        candle.ExchangeName = trade.Key;
-                                        candle.OpenPrice = trade.Value.Price;
-                                        candle.LowPrice = trade.Value.Price;
-                                        await Task.FromResult(data.Candle = $"Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}");
+                                        await Task.FromResult(data.Candle = new MarketCandle()
+                                        {
+                                            ExchangeName = trade.Key,
+                                            OpenPrice = trade.Value.Price,
+                                            LowPrice = decimal.MaxValue
+                                        });
                                     }
                                 }, data.MarketSymbol);
                             }
-                            string resultMessage = data.Ticker + "\n" + data.Trade + "\n" + data.Candle;
+                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
+                            if (data.Candle != null)
+                            {
+                                if (data.Candle.LowPrice != decimal.MaxValue)
+                                {
+                                    resultMessage += $"Exchange Name:{data.Candle.ExchangeName}; Open Price:{data.Candle.OpenPrice}; Low Price: {data.Candle.LowPrice}; High Price: {data.Candle.HighPrice}; Close Price: {data.Candle.ClosePrice}";
+                                }
+                                else
+                                {
+                                    resultMessage += $"Exchange Name: {data.Candle.ExchangeName}; Open Price:{data.Candle.OpenPrice};";
+                                }
+                            }
                             if (!string.IsNullOrWhiteSpace(resultMessage))
                             {
                                 if (data.Message == null)
@@ -337,18 +340,17 @@ namespace StockExchange
             var oldUpdates = await _bot.GetUpdatesAsync(0);
             int pageNumber = 0;//для текста, превышающего лимит
             MainMessage intermediateMessageBetweenPages = null;
-            if(oldUpdates.Length != 0)
+            if (oldUpdates.Length != 0)
             {
                 offset = oldUpdates[oldUpdates.Length - 1].Id + 1;
             }
-            int textMessageId = 0;
-            int replyMarkupMessageId = 0;
+            int messageId = 0;
             #endregion
             MainMessage previousMessage = null;
             while (true)
             {
                 var updates = await _bot.GetUpdatesAsync(offset);
-                if(updates.Length != 0)
+                if (updates.Length != 0)
                 {
                     foreach (var update in updates)
                     {
@@ -356,11 +358,11 @@ namespace StockExchange
                         User user = GetUser(chatId);
                         if (user.IsFirstMessage)
                         {
-                            (textMessageId, replyMarkupMessageId) = await SendFirstMessageAsync(user, chatId);
+                            messageId = await SendFirstMessageAsync(user, chatId);
                         }
                         MainMessage message = null;
                         if (update.Message != null)
-                        {    
+                        {
                             message = GetMessage(update.Message.Text, out bool ifMessageExist);
                             if (!ifMessageExist && !update.Message.From.IsBot)
                             {
@@ -369,7 +371,7 @@ namespace StockExchange
                             }
                         }
                         else
-                        {   
+                        {
                             message = GetMessage(update.CallbackQuery.Data, out bool ifMessageExist);
                             /*if (!ifMessageExist && !update.CallbackQuery.From.IsBot)
                             {
@@ -378,7 +380,7 @@ namespace StockExchange
                                 
                             }*/
                             //ифы для записи в user
-                            if(previousMessage.GetType() == new ChooseStockExchange().GetType())
+                            if (previousMessage.GetType() == new ChooseStockExchange().GetType())
                             {
                                 foreach (var stockExchange in new StockExchanges().StockExchangesList)
                                 {
@@ -390,8 +392,8 @@ namespace StockExchange
                                         break;
                                     }
                                 }
-                            } 
-                            else if(previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
+                            }
+                            else if (previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
                             {
                                 if (update.CallbackQuery.Data != new Back().Message && update.CallbackQuery.Data != new Previous().Message && update.CallbackQuery.Data != new Next().Message)
                                 {
@@ -410,7 +412,7 @@ namespace StockExchange
                                     }
                                 }
                             }
-                            else if(previousMessage.GetType() == new ChooseDataType().GetType())
+                            else if (previousMessage.GetType() == new ChooseDataType().GetType())
                             {
                                 if (update.CallbackQuery.Data != new Back().Message)
                                 {
@@ -435,22 +437,22 @@ namespace StockExchange
                             message.ExchangeAPI = user.StockExchange;
                             intermediateMessageBetweenPages = message;
                             pageNumber = 0;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
                         }
                         else if (message.GetType() == new Previous().GetType())
                         {
                             --pageNumber;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
                         }
                         else if (message.GetType() == new Next().GetType())
                         {
                             ++pageNumber;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, textMessageId, replyMarkupMessageId);
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
                         }
                         else
                         {
                             pageNumber = 0;
-                            await EditMessageAsync(user, message, pageNumber, textMessageId, replyMarkupMessageId);
+                            await EditMessageAsync(user, message, pageNumber, messageId);
                         }
                         previousMessage = message;
                         offset = updates[updates.Length - 1].Id + 1;

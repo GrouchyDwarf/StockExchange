@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT LICENSE
 
 Copyright 2017 Digital Ruby, LLC - http://www.digitalruby.com
@@ -253,7 +253,24 @@ namespace ExchangeSharp
 		}
 
 #endif
-
+		/*protected override async Task<IWebSocket> OnGetCandlesWebSocketAsync(Func<KeyValuePair<string, MarketCandle>> callback, params string[] marketSymbols)
+		{
+			if (marketSymbols == null || marketSymbols.Length == 0)
+			{
+				marketSymbols = (await GetMarketSymbolsAsync()).ToArray();
+			}
+			async Task innerCallback(string json)
+			{
+				var ordersUpdates = JsonConvert.DeserializeObject<BittrexStreamUpdateExchangeState>(json);
+				foreach(var fill in ordersUpdates.Fills)
+				{
+					await callback(new KeyValuePair<string, MarketCandle>(ordersUpdates.MarketName, new MarketCandle()
+					{
+						HighPrice = Math.Max(, )
+					}));
+				}
+			}
+		}*/
         protected override void OnDispose()
         {
 

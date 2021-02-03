@@ -13,10 +13,10 @@ namespace StockExchange.Messages
         {
             return await Task.FromResult(new List<string>()
             {
-                "Trade",
-                "Tickers",
-                "Candle",
-                "Назад"
+                new Trades().Message,
+                new Tickers().Message,
+                new Candles().Message,
+                new Back().Message
             });
         }
     }
