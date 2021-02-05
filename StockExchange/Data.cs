@@ -9,9 +9,7 @@ namespace StockExchange
     {
         public string MarketSymbol { get; set; }
         public string Trade { get; set; }
-        //public string Candle { get; set; }
-
-        public MarketCandle Candle { get; set; }
+        public Stack<MarketCandle> Candles { get; set; }
 
         public string Ticker { get; set; }
 

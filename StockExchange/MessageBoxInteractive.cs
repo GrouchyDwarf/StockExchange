@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace StockExchange
 {
-    class MessageBoxInteractive : IInteractive
+    public class MessageBoxInteractive : IInteractive
     {
         public Task OutputAsync(string message)
         {

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace StockExchange
 {
-    interface IInteractive
+    public interface IInteractive
     {
         Task OutputAsync(string message);
     }

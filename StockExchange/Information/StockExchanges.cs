@@ -15,7 +15,6 @@ namespace StockExchange
         {
             _stockExchanges = new List<ExchangeAPI>();
             _stockExchanges.Add(new ExchangeBinanceAPI());
-            _stockExchanges.Add(new ExchangeBitfinexAPI());
             _stockExchanges.Add(new ExchangeBittrexAPI());
             _stockExchanges.Add(new ExchangeCoinbaseAPI());
             _stockExchanges.Add(new ExchangePoloniexAPI());

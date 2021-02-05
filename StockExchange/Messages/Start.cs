@@ -7,7 +7,7 @@ namespace StockExchange.Messages
 {
     class Start : MainMessage
     {
-        public override string Message { get; } = "Начать";
+        public override string Message { get; } = "Новый вебсокет";
 
         public override async Task<List<string>> OnSend()
         {
