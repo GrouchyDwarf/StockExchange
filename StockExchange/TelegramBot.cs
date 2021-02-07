@@ -13,12 +13,6 @@ using System.Timers;
 
 namespace StockExchange
 {
-    public struct Emoji
-    {
-        public static string CheckMark = Char.ConvertFromUtf32(9989);
-        public static string PreviousArrow = Char.ConvertFromUtf32(9194);
-        public static string NextArrow = Char.ConvertFromUtf32(9193);
-    }
     public class TelegramBot
     {
         private readonly IInteractive _interactive;
@@ -26,7 +20,6 @@ namespace StockExchange
         private TelegramBotClient _bot;
         List<User> _users;
         private List<MainMessage> _messages;//bot states
-        private readonly StockExchanges _stockExchanges;
         private Timer _timer;
         private bool _timeToUpdate;
         private bool _ifTimerStarted;
@@ -60,7 +53,6 @@ namespace StockExchange
                 new Next(),
                 new ChooseDataType()
             };
-            _stockExchanges = new StockExchanges();
             _timeToUpdate = true;
             _periodUpdate = 10000;
             _timer = new Timer(_periodUpdate);
@@ -235,6 +227,10 @@ namespace StockExchange
                 {
                     buttons = MarkButtons(buttons, user.DataTypes, Emoji.CheckMark);
                 }
+                else if(user.StockExchange != null && message.GetType() == new ChooseStockExchange().GetType())
+                {
+                    buttons = MarkButtons(buttons, new List<string>() { user.StockExchange.Name }, Emoji.CheckMark);
+                }
                 if (buttons.Count > limit)
                 {
 
@@ -306,7 +302,7 @@ namespace StockExchange
                             }
                             else if (dataType == new Candles().Message)
                             {
-                                if(data.Candles == null || _candlesLimit + 1 == _candlesCounter)
+                                if(data.Candles == null || _candlesLimit > _candlesCounter)
                                 {
                                     data.Candles = new Stack<MarketCandle>();
                                     _candlesCounter = 0;
@@ -346,10 +342,16 @@ namespace StockExchange
                                     await Task.FromResult("Success");
                                 }, data.MarketSymbol);
                             }
-                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
-                            int candlesNumber = 1;
-                            foreach (var candle in new Stack<MarketCandle>(data.Candles))//constructor returns reversed stack
+                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n"; ;
+                            /*if (data.Ticker != null || data.Trade != null)
                             {
+                                resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
+                            }*/
+                            int candlesNumber = 1;
+                            if (data.Candles != null)
+                            {
+                                foreach (var candle in new Stack<MarketCandle>(data.Candles))//constructor returns reversed stack
+                                {
                                     if (candle.LowPrice != decimal.MaxValue)
                                     {
                                         resultMessage += $"{candlesNumber++}.Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}\n";
@@ -358,6 +360,7 @@ namespace StockExchange
                                     {
                                         resultMessage += $"{candlesNumber++}.Exchange Name: {candle.ExchangeName}; Open Price:{candle.OpenPrice};\n";
                                     }
+                                }
                             }
                             if (!string.IsNullOrWhiteSpace(resultMessage))
                             {
@@ -381,6 +384,9 @@ namespace StockExchange
             await _bot.DeleteMessageAsync(chatId, oldMessageId);
             int messageId = await SendMessageAsync(user, chatId);
             int offset = updates[updates.Length - 1].Id + 1;
+            user.StockExchange = null;
+            user.DataTypes.Clear();
+            user.Data.Clear();
             return (messageId, offset);
         }
 
@@ -406,8 +412,9 @@ namespace StockExchange
                     var updates = await _bot.GetUpdatesAsync(offset);
                     if (updates.Length != 0)
                     {
-                        foreach (var update in updates)
-                        {
+                        var update = updates[0];
+                        /*foreach (var update in updates)
+                        {*/
                             long chatId = GetChatId(update);
                             User user = GetUser(chatId);
                             if (user.IsFirstMessage)
@@ -427,7 +434,7 @@ namespace StockExchange
                                 {
                                     (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
                                     await _bot.EditMessageTextAsync(chatId, messageId, "Выберите команду из предоставленных");
-                                    break;
+                                    continue;
                                 }
                             }
                             else
@@ -514,7 +521,7 @@ namespace StockExchange
                             }
                             previousMessage = message;
                             offset = updates[updates.Length - 1].Id + 1;
-                        }
+                        //}
                     }
                     await OnGetDataFromWebSockets();
                 }

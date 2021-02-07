@@ -1,25 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using ExchangeSharp;
 
 namespace StockExchange
 {
-    static class Program
+    class Program
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
+        static async Task Main(string[] args)
         {
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            var key = "1435718439:AAE6JYxkaKzMetzsseQ6yKf9esMG8H8-czk";
+            var messageBoxInteractive = new ConsoleInteractive();
+            var bot = new TelegramBot(messageBoxInteractive, key);
+            await bot.Run();
         }
-            
     }
 }
