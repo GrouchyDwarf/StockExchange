@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace StockExchange.Messages
 {
-    class ChooseStockExchange : MainMessage
+    public class ChooseStockExchange : MainMessage
     {
         public override string Message { get; } = "Выбрать биржу";
 

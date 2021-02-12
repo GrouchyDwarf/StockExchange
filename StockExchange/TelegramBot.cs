@@ -10,21 +10,23 @@ using System.Threading.Tasks;
 using StockExchange.Information;
 using System.Linq;
 using System.Timers;
+using StockExchange.TelegramHelpers;
+using StockExchange.Helpers;
 
 namespace StockExchange
 {
     public class TelegramBot
     {
         private readonly IInteractive _interactive;
-        private string _key;
-        private TelegramBotClient _bot;
-        List<User> _users;
-        private List<MainMessage> _messages;//bot states
-        private Timer _timer;
+        private readonly string _key;
+        private readonly TelegramBotClient _bot;
+        private readonly List<User> _users;
+        private readonly List<MainMessage> _messages;//bot states
+        private readonly Timer _timer;
         private bool _timeToUpdate;
-        private bool _ifTimerStarted;
-        private double _periodUpdate;
-        private int _candlesLimit;
+        private readonly bool _ifTimerStarted;
+        private readonly double _periodUpdate;
+        private readonly int _candlesLimit;
         private int _candlesCounter;
 
         public TelegramBot(IInteractive interactive, string key)
@@ -56,47 +58,13 @@ namespace StockExchange
             _timeToUpdate = true;
             _periodUpdate = 10000;
             _timer = new Timer(_periodUpdate);
-            _timer.Elapsed += Func;
+            _timer.Elapsed += (source, elapsedEventArgs) => _timeToUpdate = true;
             _ifTimerStarted = false;
             _candlesLimit = 10;
             _candlesCounter = 0;
         }
 
-        private void Func(Object source, System.Timers.ElapsedEventArgs e)
-        {
-            _timeToUpdate = true;
-        }
-
-        private List<List<InlineKeyboardButton>> Convert_ButtonNames_ToInlineButtons(List<string> buttonNames)
-        {
-            var buttons = new List<List<InlineKeyboardButton>>();
-            foreach (var buttonName in buttonNames)
-            {
-                buttons.Add(new List<InlineKeyboardButton> { new InlineKeyboardButton() { Text = buttonName, CallbackData = buttonName } });
-            }
-            return buttons;
-        }
-
-        private long GetChatId(Update update)
-        {
-            return update.Message == null ? update.CallbackQuery.From.Id : update.Message.Chat.Id;
-        }
-
-        private User GetUser(long chatId)
-        {
-            foreach (var user in _users)
-            {
-                if (user.ChatId == chatId)
-                {
-                    return user;
-                }
-            }
-            User _user;
-            _users.Add(_user = new User(chatId));
-            return _user;
-        }
-
-        private async Task<int> SendMessageAsync(User user, long chatId)
+        private async Task<int> SendChangingMessageAsync(long chatId)
         {
             var message = await _bot.SendTextMessageAsync(chatId, "Главная");
             return message.MessageId;
@@ -107,29 +75,16 @@ namespace StockExchange
             var replyKeyboard = new ReplyKeyboardMarkup
             {
                 Keyboard = new List<List<KeyboardButton>>
-                                {
-                                    new List<KeyboardButton>{new KeyboardButton(new Start().Message)}
-                                }
+                {
+                    new List<KeyboardButton>{new KeyboardButton(new Start().Message)}
+                }
             };
             await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup: replyKeyboard);
             user.IsFirstMessage = false;
-            return await SendMessageAsync(user, chatId);
+            return await SendChangingMessageAsync(chatId);
         }
-        //Determine the type of command.And if command exist
-        private MainMessage GetMessage(string text, out bool ifMessageExist)
-        {
-            ifMessageExist = false;
-            foreach (var message in _messages)
-            {
-                if (message.Message == text)
-                {
-                    ifMessageExist = true;
-                    return message;
-                }
-            }
-            return null;
-        }
-        //выводит все одной страницей
+
+        //one page
         private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
         {
             int modulo = buttons.Count % limit;
@@ -150,11 +105,12 @@ namespace StockExchange
                         partButtons.Add(buttons[j]);
                     }
                 }
-                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
+                inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(partButtons));
                 await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
             }
         }
-        //выводит несколькими страницами
+
+        //several pages
         private async Task EditOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message, int messageId)
         {
             int modulo = buttons.Count % limit;
@@ -182,24 +138,9 @@ namespace StockExchange
             {
                 partButtons.Add(new Previous().Message);
             }
-            inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(partButtons));
+            inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(partButtons));
             await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
             await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, replyMarkup: inlineKeyboard);
-        }
-
-        private List<string> MarkButtons(List<string> allStrings, List<string> selectedStrings, string mark)
-        {
-            foreach (var selectedString in selectedStrings)
-            {
-                for (var i = 0; i < allStrings.Count; ++i)
-                {
-                    if (selectedString == allStrings[i])
-                    {
-                        allStrings[i] = allStrings[i] + mark;
-                    }
-                }
-            }
-            return allStrings;
         }
 
         private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int messageId)
@@ -208,7 +149,7 @@ namespace StockExchange
             var isOversizeMessage = false;
             if (user.StockExchange == null && (message.Message == new Start().Message || message.Message == new Back().Message))
             {
-                inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(new List<string>() { new ChooseStockExchange().Message }));
+                inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(new List<string>() { new ChooseStockExchange().Message }));
             }
             else
             {
@@ -221,15 +162,15 @@ namespace StockExchange
                     {
                         globalSelectedSymbols.Add(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol));
                     }
-                    buttons = MarkButtons(buttons, globalSelectedSymbols, Emoji.CheckMark);
+                    buttons = Mark.MarkStrings(buttons, globalSelectedSymbols, Emoji.CheckMark);
                 }
                 else if (user.DataTypes.Count > 0 && message.GetType() == new ChooseDataType().GetType())
                 {
-                    buttons = MarkButtons(buttons, user.DataTypes, Emoji.CheckMark);
+                    buttons = Mark.MarkStrings(buttons, user.DataTypes, Emoji.CheckMark);
                 }
-                else if(user.StockExchange != null && message.GetType() == new ChooseStockExchange().GetType())
+                else if (user.StockExchange != null && message.GetType() == new ChooseStockExchange().GetType())
                 {
-                    buttons = MarkButtons(buttons, new List<string>() { user.StockExchange.Name }, Emoji.CheckMark);
+                    buttons = Mark.MarkStrings(buttons, new List<string>() { user.StockExchange.Name }, Emoji.CheckMark);
                 }
                 if (buttons.Count > limit)
                 {
@@ -239,7 +180,7 @@ namespace StockExchange
                 }
                 else
                 {
-                    inlineKeyboard = new InlineKeyboardMarkup(Convert_ButtonNames_ToInlineButtons(buttons));
+                    inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(buttons));
                 }
             }
             if (!isOversizeMessage)
@@ -247,29 +188,6 @@ namespace StockExchange
                 await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
                 await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, inlineKeyboard);
             }
-        }
-
-        private bool CheckIfRecorded(List<string> records, string newRecord)
-        {
-            var isAlreadyRecorded = false;
-            foreach (var record in records)
-            {
-                if (record == newRecord)
-                {
-                    isAlreadyRecorded = true;
-                    break;
-                }
-            }
-            return isAlreadyRecorded;
-        }
-
-        private string DeleteMark(string record, string mark)
-        {
-            if (record.Contains(mark))
-            {
-                return record.Remove(record.IndexOf(mark));
-            }
-            return record;
         }
 
         private async Task OnGetDataFromWebSockets()
@@ -291,7 +209,6 @@ namespace StockExchange
                             }
                             else if (dataType == new Tickers().Message)
                             {
-                                //todo:добавить фильтр в библиотеку,где его нет
                                 await user.StockExchange.GetTickersWebSocketAsync(async tickers =>
                                 {
                                     foreach (var ticker in tickers)
@@ -302,14 +219,14 @@ namespace StockExchange
                             }
                             else if (dataType == new Candles().Message)
                             {
-                                if(data.Candles == null || _candlesLimit > _candlesCounter)
+                                if (data.Candles == null || _candlesLimit < _candlesCounter)
                                 {
                                     data.Candles = new Stack<MarketCandle>();
                                     _candlesCounter = 0;
                                 }
                                 if (_timeToUpdate || data.Candles.Count == 0)
                                 {
-                                    if(data.Candles.Count == 0)
+                                    if (data.Candles.Count == 0)
                                     {
                                         _timer.Start();
                                     }
@@ -317,14 +234,14 @@ namespace StockExchange
                                     {
                                         _timer.Enabled = true;
                                     }
-                                    data.Candles.Push(new MarketCandle());
+                                    data.Candles.Push(new MarketCandle() { ExchangeName = "Нет покупок в этот период"});
                                     _timeToUpdate = false;
                                     ++_candlesCounter;
                                 }
                                 var candle = data.Candles.Peek();
                                 await user.StockExchange.GetTradesWebSocketAsync(async trade =>
                                 {
-                                    if (candle == data.Candles.Peek())
+                                    if (candle == data.Candles.Peek())//synchronization
                                     {
                                         if (candle.ExchangeName != null)
                                         {
@@ -342,11 +259,7 @@ namespace StockExchange
                                     await Task.FromResult("Success");
                                 }, data.MarketSymbol);
                             }
-                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n"; ;
-                            /*if (data.Ticker != null || data.Trade != null)
-                            {
-                                resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
-                            }*/
+                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
                             int candlesNumber = 1;
                             if (data.Candles != null)
                             {
@@ -379,10 +292,10 @@ namespace StockExchange
             }
         }
 
-        internal async Task<(int messageId, int offset)> StartNewWebsocket(Update update, User user, long chatId, Update[] updates, int oldMessageId)
+        private async Task<(int messageId, int offset)> StartNewWebsocket(Update update, User user, long chatId, Update[] updates, int oldMessageId)
         {
             await _bot.DeleteMessageAsync(chatId, oldMessageId);
-            int messageId = await SendMessageAsync(user, chatId);
+            int messageId = await SendChangingMessageAsync(chatId);
             int offset = updates[updates.Length - 1].Id + 1;
             user.StockExchange = null;
             user.DataTypes.Clear();
@@ -390,7 +303,6 @@ namespace StockExchange
             return (messageId, offset);
         }
 
-        //todo:подумать над неправильным вводом без кнопок
         public async Task Run()
         {
             try
@@ -398,7 +310,7 @@ namespace StockExchange
                 int offset = 0;
                 #region Set offset considering old updates
                 var oldUpdates = await _bot.GetUpdatesAsync(0);
-                int pageNumber = 0;//для текста, превышающего лимит
+                int pageNumber = 0;
                 MainMessage intermediateMessageBetweenPages = null;
                 if (oldUpdates.Length != 0)
                 {
@@ -413,120 +325,116 @@ namespace StockExchange
                     if (updates.Length != 0)
                     {
                         var update = updates[0];
-                        /*foreach (var update in updates)
-                        {*/
-                            long chatId = GetChatId(update);
-                            User user = GetUser(chatId);
-                            if (user.IsFirstMessage)
+                        long chatId = Getter.GetChatId(update);
+                        User user = Getter.GetUser(chatId, _users);
+                        if (user.IsFirstMessage)
+                        {
+                            messageId = await SendFirstMessageAsync(user, chatId);
+                            continue;
+                        }
+                        MainMessage message = null;
+                        if (update.Message != null)
+                        {
+                            message = Getter.GetMessage(update.Message.Text, out bool ifMessageExist, _messages);
+                            if (message != null && message.GetType() == new Start().GetType())
                             {
-                                messageId = await SendFirstMessageAsync(user, chatId);
+                                (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
+                            }
+                            if (!ifMessageExist && !update.Message.From.IsBot)
+                            {
+                                (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
+                                await _bot.EditMessageTextAsync(chatId, messageId, "Выберите команду из предоставленных");
                                 continue;
                             }
-                            MainMessage message = null;
-                            if (update.Message != null)
+                        }
+                        else
+                        {
+                            message = Getter.GetMessage(update.CallbackQuery.Data, out bool ifMessageExist, _messages);
+                            if (message != null && message.GetType() == new Start().GetType())
                             {
-                                message = GetMessage(update.Message.Text, out bool ifMessageExist);
-                                if (message != null && message.GetType() == new Start().GetType())
+                                (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
+                            }
+                            if (previousMessage.GetType() == new ChooseStockExchange().GetType())
+                            {
+                                foreach (var stockExchange in new StockExchanges().StockExchangesList)
                                 {
-                                    (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
-                                }
-                                if (!ifMessageExist && !update.Message.From.IsBot)
-                                {
-                                    (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
-                                    await _bot.EditMessageTextAsync(chatId, messageId, "Выберите команду из предоставленных");
-                                    continue;
+                                    if (update.CallbackQuery.Data == stockExchange.Name)
+                                    {
+                                        user.StockExchange = stockExchange;
+                                        user.Data.Clear();
+                                        message = new Start();
+                                        break;
+                                    }
                                 }
                             }
-                            else
+                            else if (previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
                             {
-                                message = GetMessage(update.CallbackQuery.Data, out bool ifMessageExist);
-                                if (message != null && message.GetType() == new Start().GetType())
+                                if (update.CallbackQuery.Data != new Back().Message && update.CallbackQuery.Data != new Previous().Message && update.CallbackQuery.Data != new Next().Message)
                                 {
-                                    (messageId, offset) = await StartNewWebsocket(update, user, chatId, updates, messageId);
-                                }
-                                //ифы для записи в user
-                                if (previousMessage.GetType() == new ChooseStockExchange().GetType())
-                                {
-                                    foreach (var stockExchange in new StockExchanges().StockExchangesList)
+                                    foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
                                     {
-                                        if (update.CallbackQuery.Data == stockExchange.Name)
+                                        string currentSymbol = Mark.DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
+                                        if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(currentSymbol) == marketSymbol)
                                         {
-                                            user.StockExchange = stockExchange;
-                                            user.Data.Clear();
+                                            if (!Recorder.CheckIfRecorded(user.Data.Select(d => d.MarketSymbol).ToList(), marketSymbol))
+                                            {
+                                                user.Data.Add(new Data { MarketSymbol = marketSymbol });
+                                            }
                                             message = new Start();
                                             break;
                                         }
                                     }
                                 }
-                                else if (previousMessage.GetType() == new ChooseMarketSymbol().GetType() || previousMessage.GetType() == new Previous().GetType() || previousMessage.GetType() == new Next().GetType())
+                            }
+                            else if (previousMessage.GetType() == new ChooseDataType().GetType())
+                            {
+                                if (update.CallbackQuery.Data != new Back().Message)
                                 {
-                                    if (update.CallbackQuery.Data != new Back().Message && update.CallbackQuery.Data != new Previous().Message && update.CallbackQuery.Data != new Next().Message)
+                                    string currentData = Mark.DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
+                                    foreach (var dataType in await new ChooseDataType().OnSend())
                                     {
-                                        foreach (var marketSymbol in await new MarketSymbols(user.StockExchange.Name).GetMarketSymbols())
+                                        if (currentData == dataType)
                                         {
-                                            string currentSymbol = DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
-                                            if (await user.StockExchange.GlobalMarketSymbolToExchangeMarketSymbolAsync(currentSymbol) == marketSymbol)
+                                            if (!Recorder.CheckIfRecorded(user.DataTypes, dataType))
                                             {
-                                                if (!CheckIfRecorded(user.Data.Select(d => d.MarketSymbol).ToList(), marketSymbol))
-                                                {
-                                                    user.Data.Add(new Data { MarketSymbol = marketSymbol });
-                                                }
-                                                message = new Start();
-                                                break;
+                                                user.DataTypes.Add(dataType);
                                             }
-                                        }
-                                    }
-                                }
-                                else if (previousMessage.GetType() == new ChooseDataType().GetType())
-                                {
-                                    if (update.CallbackQuery.Data != new Back().Message)
-                                    {
-                                        string currentData = DeleteMark(update.CallbackQuery.Data, Emoji.CheckMark);
-                                        foreach (var dataType in await new ChooseDataType().OnSend())
-                                        {
-                                            if (currentData == dataType)
-                                            {
-                                                if (!CheckIfRecorded(user.DataTypes, dataType))
-                                                {
-                                                    user.DataTypes.Add(dataType);
-                                                }
-                                                message = new Start();
-                                                break;
-                                            }
+                                            message = new Start();
+                                            break;
                                         }
                                     }
                                 }
                             }
-                            if (message.GetType() == new ChooseMarketSymbol().GetType())
-                            {
-                                message.ExchangeAPI = user.StockExchange;
-                                intermediateMessageBetweenPages = message;
-                                pageNumber = 0;
-                                await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
-                            }
-                            else if (message.GetType() == new Previous().GetType())
-                            {
-                                --pageNumber;
-                                await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
-                            }
-                            else if (message.GetType() == new Next().GetType())
-                            {
-                                ++pageNumber;
-                                await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
-                            }
-                            else
-                            {
-                                pageNumber = 0;
-                                await EditMessageAsync(user, message, pageNumber, messageId);
-                            }
-                            previousMessage = message;
-                            offset = updates[updates.Length - 1].Id + 1;
-                        //}
+                        }
+                        if (message.GetType() == new ChooseMarketSymbol().GetType())
+                        {
+                            message.ExchangeAPI = user.StockExchange;
+                            intermediateMessageBetweenPages = message;
+                            pageNumber = 0;
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                        }
+                        else if (message.GetType() == new Previous().GetType())
+                        {
+                            --pageNumber;
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                        }
+                        else if (message.GetType() == new Next().GetType())
+                        {
+                            ++pageNumber;
+                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                        }
+                        else
+                        {
+                            pageNumber = 0;
+                            await EditMessageAsync(user, message, pageNumber, messageId);
+                        }
+                        previousMessage = message;
+                        offset = updates[updates.Length - 1].Id + 1;
                     }
                     await OnGetDataFromWebSockets();
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 await _interactive.OutputAsync(ex.Message);
             }

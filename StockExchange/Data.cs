@@ -5,7 +5,7 @@ using ExchangeSharp;
 
 namespace StockExchange
 {
-    class Data
+    public class Data
     {
         public string MarketSymbol { get; set; }
         public string Trade { get; set; }

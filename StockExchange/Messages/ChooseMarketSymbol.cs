@@ -7,17 +7,11 @@ using StockExchange.Information;
 
 namespace StockExchange.Messages
 {
-    class ChooseMarketSymbol: MainMessage
+    public class ChooseMarketSymbol: MainMessage
     {
         public override string Message { get; } = "Выбрать символ";
 
         private MarketSymbols _marketSymbols;
-
-        /*public ChooseMarketSymbol(ExchangeAPI exchangeAPI)
-        {
-            _exchangeAPI = exchangeAPI;
-            _marketSymbols = new MarketSymbols(_exchangeAPI.Name);
-        }*/
 
         public async override Task<List<string>> OnSend()
         {

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace StockExchange.Messages
 {
-    class ChooseDataType : MainMessage
+    public class ChooseDataType : MainMessage
     {
         public override string Message { get; } = "Выбрать тип вебсокета";
 

@@ -5,7 +5,7 @@ using StockExchange.Information;
 
 namespace StockExchange.Messages
 {
-    class Previous:MainMessage
+    public class Previous:MainMessage
     {
         public override string Message { get; } = Emoji.PreviousArrow + "Предыдущая";
     }

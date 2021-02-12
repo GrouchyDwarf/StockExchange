@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace StockExchange.Messages
 {
-    class Start : MainMessage
+    public class Start : MainMessage
     {
         public override string Message { get; } = "Новый вебсокет";
 

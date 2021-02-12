@@ -383,7 +383,12 @@ namespace ExchangeSharp
 
         protected override async Task<IWebSocket> OnGetTickersWebSocketAsync(Action<IReadOnlyCollection<KeyValuePair<string, ExchangeTicker>>> callback, params string[] symbols)
         {
-            Dictionary<string, string> idsToSymbols = new Dictionary<string, string>();
+			HashSet<string> filter = new HashSet<string>();
+			foreach (string marketSymbol in symbols)
+			{
+				filter.Add(marketSymbol);
+			}
+			Dictionary<string, string> idsToSymbols = new Dictionary<string, string>();
             return await ConnectWebSocketAsync(string.Empty, async (_socket, msg) =>
             {
                 JToken token = JToken.Parse(msg.ToStringFromUTF8());
@@ -392,10 +397,10 @@ namespace ExchangeSharp
                     if (token is JArray outerArray && outerArray.Count > 2 && outerArray[2] is JArray array && array.Count > 9 &&
                         idsToSymbols.TryGetValue(array[0].ToStringInvariant(), out string symbol))
                     {
-                        callback.Invoke(new List<KeyValuePair<string, ExchangeTicker>>
-                        {
-                            new KeyValuePair<string, ExchangeTicker>(symbol, await ParseTickerWebSocketAsync(symbol, array))
-                        });
+							callback.Invoke(new List<KeyValuePair<string, ExchangeTicker>>
+						{
+							new KeyValuePair<string, ExchangeTicker>(symbol, await ParseTickerWebSocketAsync(symbol, array))
+						});
                     }
                 }
             }, async (_socket) =>
@@ -403,8 +408,8 @@ namespace ExchangeSharp
                 var tickers = await GetTickersAsync();
                 foreach (var ticker in tickers)
                 {
-                    idsToSymbols[ticker.Value.Id] = ticker.Key;
-                }
+					idsToSymbols[ticker.Value.Id] = ticker.Key;
+				}
                 // subscribe to ticker channel (1002)
                 await _socket.SendMessageAsync(new { command = "subscribe", channel = 1002 });
             });

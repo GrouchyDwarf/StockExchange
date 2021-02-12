@@ -4,7 +4,7 @@ using System.Text;
 
 namespace StockExchange.Information
 {
-    class Emoji
+    public static class Emoji
     {
         public static string CheckMark { get; } = Char.ConvertFromUtf32(9989);
         public static string PreviousArrow { get; } = Char.ConvertFromUtf32(9194);

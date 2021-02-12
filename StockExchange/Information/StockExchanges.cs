@@ -17,7 +17,6 @@ namespace StockExchange
             _stockExchanges.Add(new ExchangeBinanceAPI());
             _stockExchanges.Add(new ExchangeBittrexAPI());
             _stockExchanges.Add(new ExchangeCoinbaseAPI());
-            _stockExchanges.Add(new ExchangePoloniexAPI());
         }
     }
 }

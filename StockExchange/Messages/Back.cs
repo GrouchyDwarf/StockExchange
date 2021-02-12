@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace StockExchange.Messages
 {
-    class Back: MainMessage
+    public class Back: MainMessage
     {
         public override string Message { get; } = "Назад";
 

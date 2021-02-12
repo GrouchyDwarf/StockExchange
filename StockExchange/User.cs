@@ -5,7 +5,7 @@ using ExchangeSharp;
 
 namespace StockExchange
 {
-    class User
+    public class User
     {
         public ExchangeAPI StockExchange { get; set; }
         public List<Data> Data { get; set; }
