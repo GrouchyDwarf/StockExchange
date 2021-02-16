@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using ExchangeSharp;
 
-namespace StockExchange
+namespace StockExchange.Information
 {
-    class StockExchanges
+    public class StockExchanges
     {
         private readonly List<ExchangeAPI> _stockExchanges;
 

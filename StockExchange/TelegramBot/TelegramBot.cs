@@ -59,53 +59,6 @@ namespace StockExchange.TelegramBot
             _candlesLimit = 10;
         }
 
-        private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int messageId)
-        {
-            InlineKeyboardMarkup inlineKeyboard = null;
-            var isOversizeMessage = false;
-            if (user.StockExchange == null && (message.Message == new Start().Message || message.Message == new Back().Message))
-            {
-                inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(new List<string>() { new ChooseStockExchange().Message }));
-            }
-            else
-            {
-                List<string> buttons = await message.OnSend();
-                const int limit = 95;
-                if (user.Data.Count > 0 && message.GetType() == new ChooseMarketSymbol().GetType())
-                {
-                    var globalSelectedSymbols = new List<string>();
-                    foreach (var selectedMarketSymbol in user.Data.Select(d => d.MarketSymbol).ToList())
-                    {
-                        globalSelectedSymbols.Add(await user.StockExchange.ExchangeMarketSymbolToGlobalMarketSymbolAsync(selectedMarketSymbol));
-                    }
-                    buttons = Mark.MarkStrings(buttons, globalSelectedSymbols, Emoji.CheckMark);
-                }
-                else if (user.DataTypes.Count > 0 && message.GetType() == new ChooseDataType().GetType())
-                {
-                    buttons = Mark.MarkStrings(buttons, user.DataTypes, Emoji.CheckMark);
-                }
-                else if (user.StockExchange != null && message.GetType() == new ChooseStockExchange().GetType())
-                {
-                    buttons = Mark.MarkStrings(buttons, new List<string>() { user.StockExchange.Name }, Emoji.CheckMark);
-                }
-                if (buttons.Count > limit)
-                {
-
-                    await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, messageId, _bot);
-                    isOversizeMessage = true;
-                }
-                else
-                {
-                    inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(buttons));
-                }
-            }
-            if (!isOversizeMessage)
-            {
-                await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
-                await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, inlineKeyboard);
-            }
-        }
-
         private async Task OnGetDataFromWebSockets()
         {
             foreach (var user in _users)
@@ -327,22 +280,22 @@ namespace StockExchange.TelegramBot
                             message.ExchangeAPI = user.StockExchange;
                             intermediateMessageBetweenPages = message;
                             pageNumber = 0;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                            await Sender.EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId, _bot);
                         }
                         else if (message.GetType() == new Previous().GetType())
                         {
                             --pageNumber;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                            await Sender.EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId, _bot);
                         }
                         else if (message.GetType() == new Next().GetType())
                         {
                             ++pageNumber;
-                            await EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId);
+                            await Sender.EditMessageAsync(user, intermediateMessageBetweenPages, pageNumber, messageId, _bot);
                         }
                         else
                         {
                             pageNumber = 0;
-                            await EditMessageAsync(user, message, pageNumber, messageId);
+                            await Sender.EditMessageAsync(user, message, pageNumber, messageId, _bot);
                         }
                         previousMessage = message;
                         offset = updates[updates.Length - 1].Id + 1;

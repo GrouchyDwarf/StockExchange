@@ -9,6 +9,7 @@ using System.Linq;
 using UnitTests.SenderMocks;
 using Telegram.Bot.Types;
 using StockExchange.Messages;
+using StockExchange.Information;
 
 namespace UnitTests
 {
@@ -54,7 +55,7 @@ namespace UnitTests
                     }
                 }
             }
-            ifActual(isActual);
+            IfActual(isActual);
         }
         [Fact]
         public async Task EditOversizeMessageAsync_AllButtonsAndPageNumber_DesiredPageWithButtons()
@@ -66,41 +67,74 @@ namespace UnitTests
             var pageNumber = 0;
             var user = new StockExchange.TelegramBot.User(_chatId);
             var message = new Start();
-            var bot = new TelegramBotClientMock();
 
-            await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, 1111, bot);
-            List<Message> actualMessages = bot.BotMessages;
-
-            var actualButtons = ConvertMessagesToButtons(actualMessages);
-            
-            ifActual(CompareLists(expectedButtons, actualButtons));
+            await Check(buttons, expectedButtons, pageNumber, limit, user, message);
 
             //secondPage
-            bot = new TelegramBotClientMock();
             expectedButtons = new List<string>() { "second", new Next().Message, new Previous().Message };
             pageNumber = 1;
 
-            await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, 1111, bot);
-            actualMessages = bot.BotMessages;
-
-            actualButtons = ConvertMessagesToButtons(actualMessages);
-
-            ifActual(CompareLists(expectedButtons, actualButtons));
+            await Check(buttons, expectedButtons, pageNumber, limit, user, message);
 
             //lastPage
-            bot = new TelegramBotClientMock();
             expectedButtons = new List<string>() { "third", new Previous().Message};
             pageNumber = 2;
 
-            await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, 1111, bot);
-            actualMessages = bot.BotMessages;
+            await Check(buttons, expectedButtons, pageNumber, limit, user, message);
 
-            actualButtons = ConvertMessagesToButtons(actualMessages);
+            async Task Check(List<string> buttons, List<string> expectedButtons, int pageNumber, int limit, StockExchange.TelegramBot.User user, MainMessage message)
+            {
+                var bot = new TelegramBotClientMock();
+                await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, 1111, bot);
+                List<Message> actualMessages = bot.BotMessages;
+                var actualButtons = ConvertMessagesToButtons(actualMessages);
+                IfActual(CompareLists(expectedButtons, actualButtons));
+            }
+        }
+        [Fact]
+        public async Task EditMessageAsync_Message_EditedMessage()
+        {
+            //Main menu only with choose stock exchange
+            var user = new StockExchange.TelegramBot.User(_chatId);
+            MainMessage message = new Start();
+            var pageNumber = 0;
+            var expectedButtons = new List<string>() { new ChooseStockExchange().Message };
+            await Check(expectedButtons, user, message, pageNumber);
 
-            ifActual(CompareLists(expectedButtons, actualButtons));
+            //Choose stock exchange
+            message = new ChooseStockExchange();
+            expectedButtons = await message.OnSend();
+            await Check(expectedButtons, user, message, pageNumber);
+
+            //Full main menu
+            user.StockExchange = new StockExchanges().StockExchangesList[0];
+            message = new Back() { ExchangeAPI = user.StockExchange };
+            expectedButtons = await new Start().OnSend();
+            await Check(expectedButtons, user, message, pageNumber);
+
+            //Choose data type
+            message = new ChooseDataType();
+            expectedButtons = await message.OnSend();
+            await Check(expectedButtons, user, message, pageNumber);
+
+            //ChooseMarketSymbol
+            expectedButtons = await new ChooseMarketSymbol() { ExchangeAPI = user.StockExchange }.OnSend();
+            expectedButtons.RemoveRange(Sender.Limit, expectedButtons.Count - Sender.Limit);
+            expectedButtons.Add(new Next().Message);
+            message = new ChooseMarketSymbol() { ExchangeAPI = user.StockExchange};
+            await Check(expectedButtons, user, message, 0);
+
+            async Task Check(List<string> expectedButtons, StockExchange.TelegramBot.User user, MainMessage message, int pageNumber)
+            {
+                var bot = new TelegramBotClientMock();
+                await Sender.EditMessageAsync(user, message, pageNumber, 1111, bot);
+                List<Message> actualMessages = bot.BotMessages;
+                var actualButtons = ConvertMessagesToButtons(actualMessages);
+                IfActual(CompareLists(expectedButtons, actualButtons));
+            }
         }
 
-        private void ifActual(bool isActual)
+        private void IfActual(bool isActual)
         {
             if (isActual)
             {

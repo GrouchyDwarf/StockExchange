@@ -6,7 +6,7 @@ using ExchangeSharp;
 
 namespace StockExchange.Information
 {
-    class MarketSymbols
+    public class MarketSymbols
     {
         private readonly string _stockExchangeName;
 
