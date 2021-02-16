@@ -40,7 +40,7 @@ namespace StockExchange.TelegramBot
         {
             int modulo = buttons.Count % limit;
             var partButtons = new List<string>();
-            decimal totalNumberPages = Math.Ceiling((decimal)(buttons.Count / limit)) - 1;
+            decimal totalNumberPages = Math.Ceiling((decimal)buttons.Count / limit) - 1;
             if (pageNumber != totalNumberPages)
             {
                 for (int i = pageNumber * limit; i < (pageNumber + 1) * limit; ++i)
@@ -50,7 +50,11 @@ namespace StockExchange.TelegramBot
             }
             else
             {
-                for (int i = (pageNumber + 1) * limit; i < (pageNumber + 1) * limit + modulo; ++i)
+                if(modulo == 0)
+                {
+                    ++modulo;
+                }
+                for (int i = pageNumber * limit; i < pageNumber * limit + modulo; ++i)
                 {
                     partButtons.Add(buttons[i]);
                 }

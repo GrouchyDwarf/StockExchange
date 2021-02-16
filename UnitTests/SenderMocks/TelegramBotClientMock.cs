@@ -371,7 +371,7 @@ namespace UnitTests.SenderMocks
                 message.ReplyMarkup = (InlineKeyboardMarkup)replyMarkup;
             }
             BotMessages.Add(message);
-            return message;
+            return Task.FromResult(message);
         }
 
         public Task<Message> SendVenueAsync(ChatId chatId, float latitude, float longitude, string title, string address, string foursquareId = null, bool disableNotification = false, int replyToMessageId = 0, IReplyMarkup replyMarkup = null, CancellationToken cancellationToken = default, string foursquareType = null)
