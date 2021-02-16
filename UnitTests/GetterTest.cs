@@ -54,11 +54,11 @@ namespace UnitTests
         public void GetUser_OldChatId_User()
         {
             long oldChatId = 1111;
-            var expected = new StockExchange.User(oldChatId);
-            var secondUser = new StockExchange.User(12345);
-            var users = new List<StockExchange.User>() { expected, secondUser };
+            var expected = new StockExchange.TelegramBot.User(oldChatId);
+            var secondUser = new StockExchange.TelegramBot.User(12345);
+            var users = new List<StockExchange.TelegramBot.User>() { expected, secondUser };
 
-            StockExchange.User actual = Getter.GetUser(oldChatId, users);
+            StockExchange.TelegramBot.User actual = Getter.GetUser(oldChatId, users);
 
             Assert.Equal(expected, actual);
         }
@@ -67,10 +67,10 @@ namespace UnitTests
         public void GetUser_NewChatId_User()
         {
             long newChatId = 1111;
-            var expected = new StockExchange.User(newChatId);
-            var users = new List<StockExchange.User>();
+            var expected = new StockExchange.TelegramBot.User(newChatId);
+            var users = new List<StockExchange.TelegramBot.User>();
 
-            StockExchange.User actual = Getter.GetUser(newChatId, users);
+            StockExchange.TelegramBot.User actual = Getter.GetUser(newChatId, users);
 
             if (expected.ChatId == actual.ChatId)
             {

@@ -9,7 +9,7 @@ namespace StockExchange
         {
             var key = "1435718439:AAE6JYxkaKzMetzsseQ6yKf9esMG8H8-czk";
             var messageBoxInteractive = new ConsoleInteractive();
-            var bot = new TelegramBot(messageBoxInteractive, key);
+            var bot = new TelegramBot.TelegramBot(messageBoxInteractive, key);
             await bot.Run();
         }
     }

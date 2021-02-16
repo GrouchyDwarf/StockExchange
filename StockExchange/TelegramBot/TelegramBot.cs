@@ -13,7 +13,7 @@ using System.Timers;
 using StockExchange.TelegramHelpers;
 using StockExchange.Helpers;
 
-namespace StockExchange
+namespace StockExchange.TelegramBot
 {
     public class TelegramBot
     {
@@ -22,12 +22,12 @@ namespace StockExchange
         private readonly TelegramBotClient _bot;
         private readonly List<User> _users;
         private readonly List<MainMessage> _messages;//bot states
-        private readonly Timer _timer;
+        /*private readonly Timer _timer;
         private bool _timeToUpdate;
         private readonly bool _ifTimerStarted;
+        private int _candlesCounter;*/
         private readonly double _periodUpdate;
         private readonly int _candlesLimit;
-        private int _candlesCounter;
 
         public TelegramBot(IInteractive interactive, string key)
         {
@@ -55,92 +55,8 @@ namespace StockExchange
                 new Next(),
                 new ChooseDataType()
             };
-            _timeToUpdate = true;
             _periodUpdate = 10000;
-            _timer = new Timer(_periodUpdate);
-            _timer.Elapsed += (source, elapsedEventArgs) => _timeToUpdate = true;
-            _ifTimerStarted = false;
             _candlesLimit = 10;
-            _candlesCounter = 0;
-        }
-
-        private async Task<int> SendChangingMessageAsync(long chatId)
-        {
-            var message = await _bot.SendTextMessageAsync(chatId, "Главная");
-            return message.MessageId;
-        }
-
-        private async Task<int> SendFirstMessageAsync(User user, long chatId)
-        {
-            var replyKeyboard = new ReplyKeyboardMarkup
-            {
-                Keyboard = new List<List<KeyboardButton>>
-                {
-                    new List<KeyboardButton>{new KeyboardButton(new Start().Message)}
-                }
-            };
-            await _bot.SendTextMessageAsync(chatId, "Главная", replyMarkup: replyKeyboard);
-            user.IsFirstMessage = false;
-            return await SendChangingMessageAsync(chatId);
-        }
-
-        //one page
-        private async Task SendOversizeMessageAsync(List<string> buttons, int limit, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message)
-        {
-            int modulo = buttons.Count % limit;
-            for (int i = 0; i < Math.Ceiling((decimal)(buttons.Count / limit)); ++i)
-            {
-                var partButtons = new List<string>();
-                if (i != Math.Ceiling((decimal)(buttons.Count / limit)) - 1)
-                {
-                    for (int j = i * limit; j < (i + 1) * limit; ++j)
-                    {
-                        partButtons.Add(buttons[j]);
-                    }
-                }
-                else
-                {
-                    for (int j = (i + 1) * limit; j < (i + 1) * limit + modulo; ++j)
-                    {
-                        partButtons.Add(buttons[j]);
-                    }
-                }
-                inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(partButtons));
-                await _bot.SendTextMessageAsync(user.ChatId, message.Message, replyMarkup: inlineKeyboard);
-            }
-        }
-
-        //several pages
-        private async Task EditOversizeMessageAsync(List<string> buttons, int limit, int pageNumber, InlineKeyboardMarkup inlineKeyboard, User user, MainMessage message, int messageId)
-        {
-            int modulo = buttons.Count % limit;
-            var partButtons = new List<string>();
-            decimal totalNumberPages = Math.Ceiling((decimal)(buttons.Count / limit)) - 1;
-            if (pageNumber != totalNumberPages)
-            {
-                for (int j = pageNumber * limit; j < (pageNumber + 1) * limit; ++j)
-                {
-                    partButtons.Add(buttons[j]);
-                }
-            }
-            else
-            {
-                for (int j = (pageNumber + 1) * limit; j < (pageNumber + 1) * limit + modulo; ++j)
-                {
-                    partButtons.Add(buttons[j]);
-                }
-            }
-            if (pageNumber < totalNumberPages)
-            {
-                partButtons.Add(new Next().Message);
-            }
-            if (pageNumber > 0)
-            {
-                partButtons.Add(new Previous().Message);
-            }
-            inlineKeyboard = new InlineKeyboardMarkup(ButtonConverter.ButtonNamesToInlineButtons(partButtons));
-            await _bot.EditMessageTextAsync(user.ChatId, messageId, message.Message);
-            await _bot.EditMessageReplyMarkupAsync(user.ChatId, messageId, replyMarkup: inlineKeyboard);
         }
 
         private async Task EditMessageAsync(User user, MainMessage message, int pageNumber, int messageId)
@@ -175,7 +91,7 @@ namespace StockExchange
                 if (buttons.Count > limit)
                 {
 
-                    await EditOversizeMessageAsync(buttons, limit, pageNumber, inlineKeyboard, user, message, messageId);
+                    await Sender.EditOversizeMessageAsync(buttons, limit, pageNumber, user, message, messageId, _bot);
                     isOversizeMessage = true;
                 }
                 else
@@ -219,31 +135,31 @@ namespace StockExchange
                             }
                             else if (dataType == new Candles().Message)
                             {
-                                if (data.Candles == null || _candlesLimit < _candlesCounter)
+                                if (data.Candles == null || _candlesLimit < data.CandlesCounter)
                                 {
                                     data.Candles = new Stack<MarketCandle>();
-                                    _candlesCounter = 0;
+                                    data.CandlesCounter = 0;
                                 }
-                                if (_timeToUpdate || data.Candles.Count == 0)
+                                if (data.TimeToUpdate || data.Candles.Count == 0)
                                 {
                                     if (data.Candles.Count == 0)
                                     {
-                                        _timer.Start();
+                                        data.Timer.Start();
                                     }
-                                    if (!_ifTimerStarted)
+                                    if (!data.IfTimerStarted)
                                     {
-                                        _timer.Enabled = true;
+                                        data.Timer.Enabled = true;
                                     }
                                     data.Candles.Push(new MarketCandle() { ExchangeName = "Нет покупок в этот период"});
-                                    _timeToUpdate = false;
-                                    ++_candlesCounter;
+                                    data.TimeToUpdate = false;
+                                    ++data.CandlesCounter;
                                 }
                                 var candle = data.Candles.Peek();
                                 await user.StockExchange.GetTradesWebSocketAsync(async trade =>
                                 {
                                     if (candle == data.Candles.Peek())//synchronization
                                     {
-                                        if (candle.ExchangeName != null)
+                                        if (candle.ExchangeName != "Нет покупок в этот период")
                                         {
                                             candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
                                             candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
@@ -295,7 +211,7 @@ namespace StockExchange
         private async Task<(int messageId, int offset)> StartNewWebsocket(Update update, User user, long chatId, Update[] updates, int oldMessageId)
         {
             await _bot.DeleteMessageAsync(chatId, oldMessageId);
-            int messageId = await SendChangingMessageAsync(chatId);
+            int messageId = await Sender.SendChangingMessageAsync(chatId, _bot);
             int offset = updates[updates.Length - 1].Id + 1;
             user.StockExchange = null;
             user.DataTypes.Clear();
@@ -329,7 +245,7 @@ namespace StockExchange
                         User user = Getter.GetUser(chatId, _users);
                         if (user.IsFirstMessage)
                         {
-                            messageId = await SendFirstMessageAsync(user, chatId);
+                            messageId = await Sender.SendFirstMessageAsync(user, chatId, _bot);
                             continue;
                         }
                         MainMessage message = null;
@@ -378,7 +294,7 @@ namespace StockExchange
                                         {
                                             if (!Recorder.CheckIfRecorded(user.Data.Select(d => d.MarketSymbol).ToList(), marketSymbol))
                                             {
-                                                user.Data.Add(new Data { MarketSymbol = marketSymbol });
+                                                user.Data.Add(new Data(_periodUpdate) { MarketSymbol = marketSymbol });
                                             }
                                             message = new Start();
                                             break;

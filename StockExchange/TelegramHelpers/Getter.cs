@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 using StockExchange.Messages;
-using Telegram.Bot.Types;
+using StockExchange.TelegramBot;
 
 namespace StockExchange.TelegramHelpers
 {
     public static class Getter
     {
-        public static long GetChatId(Update update)
+        public static long GetChatId(Telegram.Bot.Types.Update update)
         {
             if(update == null)
             {

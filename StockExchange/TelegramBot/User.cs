@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using ExchangeSharp;
 
-namespace StockExchange
+namespace StockExchange.TelegramBot
 {
     public class User
     {
