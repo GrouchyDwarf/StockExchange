@@ -6,7 +6,6 @@ using Telegram.Bot;
 using StockExchange.TelegramBot;
 using System.Threading.Tasks;
 using System.Linq;
-using UnitTests.SenderMocks;
 using Telegram.Bot.Types;
 using StockExchange.Messages;
 using StockExchange.Information;

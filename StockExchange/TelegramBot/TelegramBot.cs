@@ -12,6 +12,7 @@ using System.Linq;
 using System.Timers;
 using StockExchange.TelegramHelpers;
 using StockExchange.Helpers;
+using System.Net.WebSockets;
 
 namespace StockExchange.TelegramBot
 {
@@ -22,10 +23,6 @@ namespace StockExchange.TelegramBot
         private readonly TelegramBotClient _bot;
         private readonly List<User> _users;
         private readonly List<MainMessage> _messages;//bot states
-        /*private readonly Timer _timer;
-        private bool _timeToUpdate;
-        private readonly bool _ifTimerStarted;
-        private int _candlesCounter;*/
         private readonly double _periodUpdate;
         private readonly int _candlesLimit;
 
@@ -61,103 +58,114 @@ namespace StockExchange.TelegramBot
 
         private async Task OnGetDataFromWebSockets()
         {
-            foreach (var user in _users)
+            try
             {
-                if (user.DataTypes.Count > 0 && user.Data.Count > 0)
+                foreach (var user in _users)
                 {
-                    foreach (var dataType in user.DataTypes)
+                    if (user.DataTypes.Count > 0 && user.Data.Count > 0)
                     {
-                        foreach (var data in user.Data)
+                        foreach (var dataType in user.DataTypes)
                         {
-                            if (dataType == new Trades().Message)
+                            foreach (var data in user.Data)
                             {
-                                await user.StockExchange.GetTradesWebSocketAsync(async trade =>
+                                if (dataType == new Trades().Message)
                                 {
-                                    await Task.FromResult(data.Trade = $"Ticker {trade.Key}\nPrice:{trade.Value.Price}; Amount:{trade.Value.Amount}");
-                                }, data.MarketSymbol);
-                            }
-                            else if (dataType == new Tickers().Message)
-                            {
-                                await user.StockExchange.GetTickersWebSocketAsync(async tickers =>
-                                {
-                                    foreach (var ticker in tickers)
+                                    await user.StockExchange.GetTradesWebSocketAsync(async trade =>
                                     {
-                                        await Task.FromResult(data.Ticker = $"Ticker {ticker.Key}; Value: {ticker.Value}");
-                                    }
-                                }, data.MarketSymbol);
-                            }
-                            else if (dataType == new Candles().Message)
-                            {
-                                if (data.Candles == null || _candlesLimit < data.CandlesCounter)
-                                {
-                                    data.Candles = new Stack<MarketCandle>();
-                                    data.CandlesCounter = 0;
+                                        await Task.FromResult(data.Trade = $"Ticker {trade.Key}\nPrice:{trade.Value.Price}; Amount:{trade.Value.Amount}");
+                                    }, data.MarketSymbol);
                                 }
-                                if (data.TimeToUpdate || data.Candles.Count == 0)
+                                else if (dataType == new Tickers().Message)
                                 {
-                                    if (data.Candles.Count == 0)
+                                    await user.StockExchange.GetTickersWebSocketAsync(async tickers =>
                                     {
-                                        data.Timer.Start();
-                                    }
-                                    if (!data.IfTimerStarted)
-                                    {
-                                        data.Timer.Enabled = true;
-                                    }
-                                    data.Candles.Push(new MarketCandle() { ExchangeName = "Нет покупок в этот период"});
-                                    data.TimeToUpdate = false;
-                                    ++data.CandlesCounter;
-                                }
-                                var candle = data.Candles.Peek();
-                                await user.StockExchange.GetTradesWebSocketAsync(async trade =>
-                                {
-                                    if (candle == data.Candles.Peek())//synchronization
-                                    {
-                                        if (candle.ExchangeName != "Нет покупок в этот период")
+                                        foreach (var ticker in tickers)
                                         {
-                                            candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
-                                            candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
-                                            candle.ClosePrice = trade.Value.Price;
+                                            await Task.FromResult(data.Ticker = $"Ticker {ticker.Key}; Value: {ticker.Value}");
+                                        }
+                                    }, data.MarketSymbol);
+                                }
+                                else if (dataType == new Candles().Message)
+                                {
+                                    if (data.Candles == null || _candlesLimit < data.CandlesCounter)
+                                    {
+                                        data.Candles = new Stack<MarketCandle>();
+                                        data.CandlesCounter = 0;
+                                    }
+                                    if (data.TimeToUpdate || data.Candles.Count == 0)
+                                    {
+                                        if (data.Candles.Count == 0)
+                                        {
+                                            data.Timer.Start();
+                                        }
+                                        if (!data.IfTimerStarted)
+                                        {
+                                            data.Timer.Enabled = true;
+                                        }
+                                        data.Candles.Push(new MarketCandle() { ExchangeName = "Нет покупок в этот период" });
+                                        data.TimeToUpdate = false;
+                                        ++data.CandlesCounter;
+                                    }
+                                    var candle = data.Candles.Peek();
+                                    await user.StockExchange.GetTradesWebSocketAsync(async trade =>
+                                    {
+                                        if (candle == data.Candles.Peek())//synchronization
+                                    {
+                                            if (candle.ExchangeName != "Нет покупок в этот период")
+                                            {
+                                                candle.HighPrice = Math.Max(candle.HighPrice, trade.Value.Price);
+                                                candle.LowPrice = Math.Min(candle.LowPrice, trade.Value.Price);
+                                                candle.ClosePrice = trade.Value.Price;
+                                            }
+                                            else
+                                            {
+                                                candle.ExchangeName = trade.Key;
+                                                candle.OpenPrice = trade.Value.Price;
+                                                candle.LowPrice = decimal.MaxValue;
+                                            }
+                                        }
+                                        await Task.FromResult("Success");
+                                    }, data.MarketSymbol);
+                                }
+                                string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
+                                int candlesNumber = 1;
+                                if (data.Candles != null)
+                                {
+                                    foreach (var candle in new Stack<MarketCandle>(data.Candles))//constructor returns reversed stack
+                                    {
+                                        if (candle.LowPrice != decimal.MaxValue)
+                                        {
+                                            resultMessage += $"{candlesNumber++}.Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}\n";
                                         }
                                         else
                                         {
-                                            candle.ExchangeName = trade.Key;
-                                            candle.OpenPrice = trade.Value.Price;
-                                            candle.LowPrice = decimal.MaxValue;
+                                            resultMessage += $"{candlesNumber++}.Exchange Name: {candle.ExchangeName}; Open Price:{candle.OpenPrice};\n";
                                         }
                                     }
-                                    await Task.FromResult("Success");
-                                }, data.MarketSymbol);
-                            }
-                            string resultMessage = data.Ticker + "\n\n" + data.Trade + "\n\n";
-                            int candlesNumber = 1;
-                            if (data.Candles != null)
-                            {
-                                foreach (var candle in new Stack<MarketCandle>(data.Candles))//constructor returns reversed stack
-                                {
-                                    if (candle.LowPrice != decimal.MaxValue)
-                                    {
-                                        resultMessage += $"{candlesNumber++}.Exchange Name:{candle.ExchangeName}; Open Price:{candle.OpenPrice}; Low Price: {candle.LowPrice}; High Price: {candle.HighPrice}; Close Price: {candle.ClosePrice}\n";
-                                    }
-                                    else
-                                    {
-                                        resultMessage += $"{candlesNumber++}.Exchange Name: {candle.ExchangeName}; Open Price:{candle.OpenPrice};\n";
-                                    }
                                 }
-                            }
-                            if (!string.IsNullOrWhiteSpace(resultMessage))
-                            {
-                                if (data.Message == null)
+                                if (!string.IsNullOrWhiteSpace(resultMessage))
                                 {
-                                    data.Message = await _bot.SendTextMessageAsync(user.ChatId, resultMessage);
-                                }
-                                else if (data.Message.Text != resultMessage.Trim())
-                                {
-                                    data.Message = await _bot.EditMessageTextAsync(user.ChatId, data.Message.MessageId, resultMessage);
+                                    if (data.Message == null)
+                                    {
+                                        data.Message = await _bot.SendTextMessageAsync(user.ChatId, resultMessage);
+                                    }
+                                    else if (data.Message.Text != resultMessage.Trim())
+                                    {
+                                        data.Message = await _bot.EditMessageTextAsync(user.ChatId, data.Message.MessageId, resultMessage);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+            catch(WebSocketException ex)
+            {
+                await _interactive.OutputAsync(ex.Message);
+            }
+            catch(Exception ex)
+            {
+                await _interactive.OutputAsync(ex.Message);
             }
         }
 

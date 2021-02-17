@@ -7,7 +7,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace StockExchange.Messages
 {
-    public abstract class MainMessage
+    public class MainMessage
     {
         public virtual string Message { get; }
 
